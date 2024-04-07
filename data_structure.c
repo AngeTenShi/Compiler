@@ -1,65 +1,56 @@
 #include "structit.h"
 
+SymbolTable *createSymbolTable()
+{
+    SymbolTable *newSymbolTable = (SymbolTable *)malloc(sizeof(SymbolTable));
+    newSymbolTable->symbols = NULL;
+    newSymbolTable->next = NULL;
+    return (newSymbolTable);
+}
+
+void pushSymbolTable(SymbolTable *symbolTable, SymbolTableStack **symbolTableStack)
+{
+    SymbolTableStack *newSymbolTableStack = (SymbolTableStack *)malloc(sizeof(SymbolTableStack));
+    newSymbolTableStack->top = symbolTable;
+    *symbolTableStack = newSymbolTableStack;
+}
+
+// pop the top symboltable and update the top of the stack
+void popSymbolTable(SymbolTableStack **symbolTableStack)
+{
+    SymbolTable *tmp = (*symbolTableStack)->top;
+    (*symbolTableStack)->top = tmp->next;
+    free(tmp);
+}
+
+void    setVariableValue(char *name, SymbolTableStack *stack, void *value)
+{
+    Symbol *to_update = getSymbol(name, stack);
+    to_update->value = value;
+}
+
 void cleanStructure(Structure *structure)
 {
     if (structure != NULL)
     {
-        if (structure->symbolTable != NULL)
+        if (structure->all_fields != NULL)
         {
-            if (structure->symbolTable->content != NULL)
-            {
-                Symbol *tmp = structure->symbolTable->content;
+                Symbol *tmp = structure->all_fields;
                 while (tmp != NULL)
                 {
                     Symbol *tmp2 = tmp;
                     tmp = tmp->next;
                     free(tmp2);
                 }
-            }
-            free(structure->symbolTable);
         }
         free(structure);
     }
 
 }
 
-void addSymbol(Symbol *symbol, SymbolTable **symbolTable)
-{
-    if ((*symbolTable)->content == NULL)
-    {
-        (*symbolTable)->content = symbol;
-        return;
-    }
-    Symbol *tmp = (*symbolTable)->content;
-    while (tmp->next != NULL)
-    {
-        tmp = tmp->next;
-    }
-    tmp->next = symbol;
-}
-
-int findSymbol(char *name, SymbolTable *symbolTable, int scope)
-{
-    Symbol *tmp = symbolTable->content;
-    while (tmp != NULL)
-    {
-        if (strncmp(tmp->name, name, strlen(name)) == 0)
-        {
-            if (tmp->dataType == 2)
-                return (1);
-            if (tmp->scope <= scope)
-                return (1);
-            else
-                return (-1);
-        }
-        tmp = tmp->next;
-    }
-    return (0);
-}
-
 void printSymbolTable(SymbolTable *symbolTable)
 {
-    Symbol *tmp = symbolTable->content;
+    Symbol *tmp = symbolTable->symbols;
     printf("Symbol Table:\n");
     while (tmp != NULL)
     {  
@@ -70,25 +61,23 @@ void printSymbolTable(SymbolTable *symbolTable)
     printf("---------------------------\n");
 }
 
-Symbol *createSymbol(char *name, int dataType, int type, int scope, void *value, Structure *structure)
+Symbol *createSymbol(char *name, int dataType, int type, void *value, Structure *structure)
 {
     Symbol *newSymbol = (Symbol *)malloc(sizeof(Symbol));
     newSymbol->name = name;
     newSymbol->dataType = dataType;
     newSymbol->type = type;
-    newSymbol->scope = scope;
     newSymbol->value = value;
     newSymbol->next = NULL;
     if (structure != NULL)
     {
         newSymbol->structure = (Structure *)malloc(sizeof(Structure));
-        newSymbol->structure->symbolTable = (SymbolTable*)malloc(sizeof(SymbolTable));
-        newSymbol->structure->symbolTable->content = NULL;
-        Symbol *tmp = structure->symbolTable->content;
+        newSymbol->structure->all_fields = (Symbol*)malloc(sizeof(Symbol));
+        Symbol *tmp = structure->all_fields;
         while (tmp != NULL)
         {
-            Symbol *s = createSymbol(tmp->name, tmp->dataType, tmp->type, tmp->scope, tmp->value, tmp->structure);
-            addSymbol(s, &newSymbol->structure->symbolTable);
+            Symbol *copy_symbol_from_tmp = createSymbol(tmp->name, tmp->dataType, tmp->type, tmp->value, tmp->structure);
+            addSymbolToStructure(copy_symbol_from_tmp, newSymbol->structure);
             tmp = tmp->next;
         }
         cleanStructure(structure);
@@ -98,7 +87,7 @@ Symbol *createSymbol(char *name, int dataType, int type, int scope, void *value,
 
 int structHasMember(Structure *structure, char *name)
 {
-    Symbol *tmp = structure->symbolTable->content;
+    Symbol *tmp = structure->all_fields;
     while (tmp != NULL)
     {
         if (strncmp(tmp->name, name, strlen(name)) == 0)
@@ -110,27 +99,10 @@ int structHasMember(Structure *structure, char *name)
     return (0);
 }
 
-Symbol *getSymbol(char *name, SymbolTable *symbolTable, int scope)
+void *getVariableValue(char *name, SymbolTable *symbolTable)
 {
-    Symbol *tmp = symbolTable->content;
+    Symbol *tmp = symbolTable->symbols;
     while (tmp != NULL)
-    {
-        if (strncmp(tmp->name, name, strlen(name)) == 0)
-        {
-            if (tmp->dataType == 2)
-                return (tmp);
-            if (tmp->scope <= scope)
-                return (tmp);
-        }
-        tmp = tmp->next;
-    }
-    return (NULL);
-}
-
-void *getVariableValue(char *name, SymbolTable *symbolTable, int scope)
-{
-    Symbol *tmp = symbolTable->content;
-    while (tmp != NULL && tmp->scope <= scope)
     {
         if (strncmp(tmp->name, name, strlen(name)) == 0)
         {
@@ -141,19 +113,83 @@ void *getVariableValue(char *name, SymbolTable *symbolTable, int scope)
     return (NULL);
 }
 
-void pushExpression(void *expression, StackExpression **stack)
+void addSymbol(Symbol *symbol, SymbolTableStack *symbolTableStack)
 {
-    StackExpression *newStack = (StackExpression *)malloc(sizeof(StackExpression));
-    newStack->expression = expression;
-    newStack->next = *stack;
-    *stack = newStack;
+    if (find_symbol(symbol->name, symbolTableStack) == 2)
+    {
+        printf("Symbol %s already exists\n", symbol->name);
+        free(symbol);
+        return;
+    }
+    SymbolTable *symbolTable = symbolTableStack->top;
+    if (symbolTable->symbols == NULL)
+        symbolTable->symbols = symbol;
+    else
+    {
+        Symbol *tmp = symbolTable->symbols;
+        while (tmp->next != NULL)
+        {
+            tmp = tmp->next;
+        }
+        tmp->next = symbol;
+    }
 }
 
-void *popExpression(StackExpression **stack)
+int find_symbol(char *name, SymbolTableStack *stack)
 {
-    StackExpression *tmp = *stack;
-    void *expression = tmp->expression;
-    *stack = tmp->next;
-    free(tmp);
-    return expression;
+    SymbolTable *tmp = stack->top;
+    Symbol *tmp2;
+    while (tmp != NULL)
+    {
+        Symbol *tmp2 = tmp->symbols;
+        while (tmp2 != NULL)
+        {
+            if (strncmp(tmp2->name, name, strlen(name)) == 0)
+                break;
+            tmp2 = tmp2->next;
+        }
+        tmp = tmp->next;
+    }
+    if (tmp2 != NULL)
+    {
+        if (tmp == stack->top)
+            return (2);
+        else
+            return (1);
+    }
+    return (0);
+}
+
+Symbol *getSymbol(char *name, SymbolTableStack *stack)
+{
+    SymbolTable *tmp = stack->top;
+    while (tmp != NULL)
+    {
+        Symbol *tmp2 = tmp->symbols;
+        while (tmp2 != NULL)
+        {
+            if (strncmp(tmp2->name, name, strlen(name)) == 0)
+                return (tmp2);
+            tmp2 = tmp2->next;
+        }
+        tmp = tmp->next;
+    }
+
+}
+
+void addSymbolToStructure(Symbol *symbol, Structure *structure)
+{
+    if (structure->all_fields == NULL)
+    {
+        structure->all_fields = symbol;
+    }
+    else
+    {
+        Symbol *tmp = structure->all_fields;
+        while (tmp->next != NULL)
+        {
+            tmp = tmp->next;
+        }
+        tmp->next = symbol;
+    }
 }

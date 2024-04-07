@@ -5,10 +5,8 @@
         int yylex();
         int yywrap();
         void yyerror(const char *s);
-        SymbolTable *symbolTable;
-        StackExpression *stackExpression;
-        Structure *currentStructure = NULL;
-        int scope = 0; 
+        SymbolTableStack *symbolTableStack = NULL;
+        Structure *current_structure = NULL;
 %}
 
 %union {
@@ -109,26 +107,20 @@ expression
 
 declaration
         : declaration_specifiers declarator ';' {
-                int var_exists = findSymbol($2, symbolTable, scope);
-                if (var_exists == 1) { yyerror("Variable already declared"); exit_compiler(); }
-                if (var_exists == -1) { yyerror("Variable is not accessible from this scope"); exit_compiler();}
                 int dataType = $1.dataType;
                 char *name = $2;
                 int type = $1.type;
-                Symbol *content = createSymbol(name, dataType, type, scope, NULL, NULL);
-                addSymbol(content, &symbolTable);
+                Symbol *content = createSymbol(name, dataType, type, NULL, NULL);
+                addSymbol(content, symbolTableStack);
         }
         | struct_specifier ';' { 
-                int var_exists = findSymbol($1.name, symbolTable, scope);
-                if (var_exists == 1) { yyerror("Variable already declared"); exit_compiler(); }
-                if (var_exists == -1) { yyerror("Variable is not accessible from this scope"); exit_compiler();}
                 int dataType = $1.dataType;
                 int type = $1.type;
                 char *name = $1.name;
-                Structure *structure = currentStructure;
-                Symbol *content = createSymbol(name, dataType, type, scope, NULL, structure);
-                addSymbol(content, &symbolTable);
-                currentStructure = NULL;
+                Structure *structure = current_structure;
+                Symbol *content = createSymbol(name, dataType, type, NULL, structure);
+                addSymbol(content, symbolTableStack);
+                current_structure = NULL;
                 }
         ;
 
@@ -155,14 +147,15 @@ struct_declaration_list
 
 struct_declaration
         : type_specifier declarator ';' {
-                if (currentStructure == NULL)
+                if (current_structure == NULL)
                 {
-                        printf("Creating structure for %s\n", $$.name);
-                        currentStructure = malloc(sizeof(Structure));
-                        currentStructure->symbolTable = malloc(sizeof(SymbolTable));
+                        current_structure = malloc(sizeof(Structure));
+                        current_structure->all_fields = malloc(sizeof(Symbol));
                 }
-                SymbolTable *symtable = currentStructure->symbolTable;
-                addSymbol(createSymbol($2, $1.dataType, $1.type, scope, NULL, NULL), &symtable); 
+                Symbol *tmp = current_structure->all_fields;
+                while (tmp->next != NULL)
+                        tmp = tmp->next;
+                tmp->next = createSymbol($2, $1.dataType, $1.type, NULL, NULL);
                 }
         ;
 
@@ -173,8 +166,11 @@ declarator
 
 direct_declarator
         : IDENTIFIER { $$ = $1;}
+        {
+                printf("Symbol : %s\n", $1);
+        }
         | '(' declarator ')' { $$ = $2;}
-        | direct_declarator '(' parameter_list ')' { $$ = $1;}
+        | direct_declarator '(' parameter_list ')' 
         | direct_declarator '(' ')' { $$ = $1;}
         ;
 
@@ -247,7 +243,7 @@ external_declaration
         ;
 
 function_definition
-        : declaration_specifiers declarator compound_statement
+        : declaration_specifiers declarator compound_statement 
         ;
 
 %%
@@ -280,10 +276,10 @@ int main(int ac, char **av)
                 printf("Cannot open file %s\n", av[1]);
                 return 1;
         }
-        symbolTable = malloc(sizeof(SymbolTable));
-        stackExpression = malloc(sizeof(StackExpression));
+        symbolTableStack = malloc(sizeof(SymbolTableStack));
+        symbolTableStack->top = malloc(sizeof(SymbolTable));
         yyparse();
-        free(currentStructure);
+        free(current_structure);
         fclose(yyin);
         return (0);
 }

@@ -10,7 +10,6 @@ IS                      (u|U|l|L)*
     #include <stdio.h>
     #include "structit.h"
     extern int yylineno;
-    extern int scope;
 %}
 
 %%
@@ -34,8 +33,8 @@ IS                      (u|U|l|L)*
 "&&"                    { return AND_OP; }
 "||"                    { return OR_OP; }
 "->"                    { return PTR_OP;}
-"{"                     { scope++; return '{';}
-"}"                     { scope--; return '}';}
+"{"                     { return '{';}
+"}"                     { return '}';}
 0{D}+{IS}?              { yyerror("octal not accepted");}
 0[xX]{H}+{IS}?          { yyerror("hexadecimal not accepted"); }
 {D}+{E}{FS}?            { yyerror("float not accepted"); }

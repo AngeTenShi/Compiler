@@ -6,43 +6,42 @@
 #include <stdlib.h>
 
 struct Structure;
-extern struct Structure *currentStructure;
-typedef struct Symbol {
+extern struct Structure *current_structure;
+typedef struct Symbol { // Symbol
     char *name;
     int dataType; // 0 - void, 1 - int, 2 - struct
     int type; // 0 - variable, 1 - function
-    int scope;
     void *value;
     struct Structure *structure;
     struct Symbol *next;
 } Symbol;
 
-typedef struct SymbolTable {
-    struct Symbol *content;
+typedef struct SymbolTable { // Symbol table
+    struct Symbol *symbols; // all symbols of the tablee
+    struct SymbolTable *next;
 } SymbolTable;
 
-typedef struct Structure {
-    SymbolTable *symbolTable;
+typedef struct SymbolTableStack { // stack of symbol tables
+    struct SymbolTable *top; // top of the stack
+} SymbolTableStack;
+
+typedef struct Structure { // Structure with symbols 
+    Symbol *all_fields; // variables of the structure
 } Structure;
 
-typedef struct StackExp {
-    void *expression;
-    struct StackExp *next;
-} StackExpression;
 
 #include "y.tab.h"
 void yyerror(const char *s);
 
-
-Symbol *createSymbol(char *name, int dataType, int type, int scope, void *value, Structure *structure);
-void addSymbol(Symbol *symbol, SymbolTable **symbolTable);
-int findSymbol(char *name, SymbolTable *symbolTable, int scope); // if -1 found but in not visible scope
-Symbol *getSymbol(char *name, SymbolTable *symbolTable, int scope);
-void *getVariableValue(char *name, SymbolTable *symbolTable, int scope);
+SymbolTable *createSymbolTable();
+void pushSymbolTable(SymbolTable *symbolTable, SymbolTableStack **symbolTableStack);
+void popSymbolTable(SymbolTableStack **symbolTableStack);
+Symbol *createSymbol(char *name, int dataType, int type, void *value, Structure *structure);
+void addSymbol(Symbol *symbol, SymbolTableStack *symbolTableStack);
+int find_symbol(char *name, SymbolTableStack *stack); 
+Symbol *getSymbol(char *name, SymbolTableStack *stack);
+void *getVariableValue(char *name, SymbolTable *symbolTable);
 void printSymbolTable(SymbolTable *symbolTable);
-void setVariableValue(char *name, SymbolTable *symbolTable, void *value);
-void pushExpression(void *expression, StackExpression **stack);
-void *popExpression(StackExpression **stack);
-
-
+void setVariableValue(char *name, SymbolTableStack *stack, void *value);
+void addSymbolToStructure(Symbol *symbol, Structure *structure);
 #endif
