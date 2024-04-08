@@ -112,6 +112,7 @@ declaration
                 int type = $1.type;
                 Symbol *content = createSymbol(name, dataType, type, NULL, NULL);
                 addSymbol(content, symbolTableStack);
+                printSymbolTable(symbolTableStack->top);
         }
         | struct_specifier ';' { 
                 int dataType = $1.dataType;
@@ -121,6 +122,7 @@ declaration
                 Symbol *content = createSymbol(name, dataType, type, NULL, structure);
                 addSymbol(content, symbolTableStack);
                 current_structure = NULL;
+                printSymbolTable(symbolTableStack->top);
                 }
         ;
 
@@ -166,12 +168,23 @@ declarator
 
 direct_declarator
         : IDENTIFIER { $$ = $1;}
-        {
-                printf("Symbol : %s\n", $1);
-        }
         | '(' declarator ')' { $$ = $2;}
         | direct_declarator '(' parameter_list ')' 
-        | direct_declarator '(' ')' { $$ = $1;}
+        { 
+                $$ = $1;
+                SymbolTable *to_push = createSymbolTable();
+                Symbol *tmp = createSymbol($1, -2, 1, NULL, NULL);
+                addSymbol(tmp, symbolTableStack);
+                pushSymbolTable(to_push, &symbolTableStack);
+        } 
+        | direct_declarator '(' ')'
+        {
+                $$ = $1;
+                SymbolTable *to_push = createSymbolTable();
+                Symbol *tmp = createSymbol($1, -2, 1, NULL, NULL);
+                addSymbol(tmp, symbolTableStack);
+                pushSymbolTable(to_push, &symbolTableStack);
+        }
         ;
 
 parameter_list
@@ -238,12 +251,17 @@ program
         ;
 
 external_declaration
-        : function_definition
-        | declaration
+        : function_definition { }
+        | declaration { } 
         ;
 
 function_definition
-        : declaration_specifiers declarator compound_statement 
+        : declaration_specifiers declarator compound_statement
+        {
+                printSymbolTable(symbolTableStack->top);
+                popSymbolTable(&symbolTableStack);
+                printSymbolTable(symbolTableStack->top);
+        }
         ;
 
 %%

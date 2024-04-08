@@ -10,9 +10,8 @@ SymbolTable *createSymbolTable()
 
 void pushSymbolTable(SymbolTable *symbolTable, SymbolTableStack **symbolTableStack)
 {
-    SymbolTableStack *newSymbolTableStack = (SymbolTableStack *)malloc(sizeof(SymbolTableStack));
-    newSymbolTableStack->top = symbolTable;
-    *symbolTableStack = newSymbolTableStack;
+    symbolTable->next = (*symbolTableStack)->top;
+    (*symbolTableStack)->top = symbolTable;
 }
 
 // pop the top symboltable and update the top of the stack
@@ -50,6 +49,11 @@ void cleanStructure(Structure *structure)
 
 void printSymbolTable(SymbolTable *symbolTable)
 {
+    if (symbolTable == NULL)
+    {
+        printf("Symbol Table is empty\n");
+        return;
+    }
     Symbol *tmp = symbolTable->symbols;
     printf("Symbol Table:\n");
     while (tmp != NULL)
