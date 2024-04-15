@@ -25,7 +25,6 @@ IS                      (u|U|l|L)*
 "return"                { return RETURN; }
 "sizeof"                { return SIZEOF; }
 "struct"                { return STRUCT; }
-"malloc"                { return MALLOC; }
 "<="                    { return LE_OP; }
 ">="                    { return GE_OP; }
 "=="                    { return EQ_OP; }
@@ -45,7 +44,7 @@ L?\"(\\.|[^\\"])*\"     { yyerror("string not accepted");}
 {L}({L}|{D})*           { yylval.id = strdup(yytext); return IDENTIFIER; }
 {D}+{IS}?               { yylval.val = atoi(yytext); return CONSTANT;}
 
-[\;\(\)\:\=\+\-\/\<\>\&\*]  { return yytext[0]; }
-.                       { printf("Line %d: unknown token: %d\n", yylineno, yytext[0]);}
+[\;\(\)\:\=\+\-\/\<\>\&\*\,]  { return yytext[0]; }
+.                       { printf("Mystery character %s\n", yytext); }
 
 %%

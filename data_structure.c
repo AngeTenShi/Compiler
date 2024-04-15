@@ -1,6 +1,6 @@
 #include "structit.h"
 
-SymbolTable *createSymbolTable()
+SymbolTable *create_symbol_table()
 {
     SymbolTable *newSymbolTable = (SymbolTable *)malloc(sizeof(SymbolTable));
     newSymbolTable->symbols = NULL;
@@ -8,46 +8,51 @@ SymbolTable *createSymbolTable()
     return (newSymbolTable);
 }
 
-void pushSymbolTable(SymbolTable *symbolTable, SymbolTableStack **symbolTableStack)
+void push_symbol_table(SymbolTable *symbolTable, SymbolTableStack **symbolTableStack)
 {
+    if ((*symbolTableStack)->top == NULL)
+    {
+        (*symbolTableStack)->top = symbolTable;
+        return;
+    }
     symbolTable->next = (*symbolTableStack)->top;
     (*symbolTableStack)->top = symbolTable;
 }
 
-// pop the top symboltable and update the top of the stack
-void popSymbolTable(SymbolTableStack **symbolTableStack)
+void pop_symbol_table(SymbolTableStack **symbolTableStack)
 {
+    if ((*symbolTableStack)->top == NULL)
+    {
+        printf("Symbol Table Stack is empty\n");
+        return;
+    }
+    printf("Popping symbol table\n");
     SymbolTable *tmp = (*symbolTableStack)->top;
     (*symbolTableStack)->top = tmp->next;
     free(tmp);
 }
 
-void    setVariableValue(char *name, SymbolTableStack *stack, void *value)
+void    set_variable_value(char *name, SymbolTableStack *stack, void *value)
 {
-    Symbol *to_update = getSymbol(name, stack);
+    Symbol *to_update = get_symbol(name, stack);
     to_update->value = value;
 }
 
-void cleanStructure(Structure *structure)
+void print_symbol(Symbol *s)
 {
-    if (structure != NULL)
+    if (s == NULL)
     {
-        if (structure->all_fields != NULL)
-        {
-                Symbol *tmp = structure->all_fields;
-                while (tmp != NULL)
-                {
-                    Symbol *tmp2 = tmp;
-                    tmp = tmp->next;
-                    free(tmp2);
-                }
-        }
-        free(structure);
+        printf("Symbol is NULL\n");
+        return;
     }
-
+    char *type = (s->type == 0) ? "Variable" : "Function";
+    if (s->data_type == NULL)
+        printf("Name: %s, DataType: NULL, Type: %s, \n", s->name, type);
+    else
+     printf("Name: %s, DataType: %s, Type: %s, \n", s->name, s->data_type->name, type);
 }
 
-void printSymbolTable(SymbolTable *symbolTable)
+void print_symbol_table(SymbolTable *symbolTable)
 {
     if (symbolTable == NULL)
     {
@@ -59,51 +64,51 @@ void printSymbolTable(SymbolTable *symbolTable)
     while (tmp != NULL)
     {  
         char *type = (tmp->type == 0) ? "Variable" : "Function";
-        printf("Name: %s, DataType: %d, Type: %s, Content : %s\n", tmp->name, tmp->dataType, type, tmp->value);
+        if (tmp->data_type == NULL)
+            printf("Name: %s, DataType: NULL, Type: %s, \n", tmp->name, type);
+        else
+            printf("Name: %s, DataType: %s, Type: %s, \n", tmp->name, tmp->data_type->name, type);
         tmp = tmp->next;
     }
     printf("---------------------------\n");
 }
 
-Symbol *createSymbol(char *name, int dataType, int type, void *value, Structure *structure)
+Symbol *create_symbol(char *name, Type *data_type, int type, void *value, int to_push, int is_pointer)
 {
     Symbol *newSymbol = (Symbol *)malloc(sizeof(Symbol));
     newSymbol->name = name;
-    newSymbol->dataType = dataType;
+    if (data_type != NULL)
+        newSymbol->data_type = get_type(data_type->name, type_list);
+    else
+        newSymbol->data_type = NULL;
     newSymbol->type = type;
     newSymbol->value = value;
     newSymbol->next = NULL;
-    if (structure != NULL)
-    {
-        newSymbol->structure = (Structure *)malloc(sizeof(Structure));
-        newSymbol->structure->all_fields = (Symbol*)malloc(sizeof(Symbol));
-        Symbol *tmp = structure->all_fields;
-        while (tmp != NULL)
-        {
-            Symbol *copy_symbol_from_tmp = createSymbol(tmp->name, tmp->dataType, tmp->type, tmp->value, tmp->structure);
-            addSymbolToStructure(copy_symbol_from_tmp, newSymbol->structure);
-            tmp = tmp->next;
-        }
-        cleanStructure(structure);
-    }
+    newSymbol->to_push = to_push;
+    newSymbol->is_pointer = is_pointer;
     return (newSymbol);
 }
 
-int structHasMember(Structure *structure, char *name)
+int struct_has_member(Symbol *structure, char *name)
 {
-    Symbol *tmp = structure->all_fields;
+    if (structure == NULL)
+        return (0);
+    Symbol *tmp = structure;
     while (tmp != NULL)
     {
-        if (strncmp(tmp->name, name, strlen(name)) == 0)
+        if (tmp->name != NULL)
         {
-            return (1);
+            if (strncmp(tmp->name, name, strlen(name)) == 0)
+            {
+                return (1);
+            }
         }
         tmp = tmp->next;
     }
     return (0);
 }
 
-void *getVariableValue(char *name, SymbolTable *symbolTable)
+void *get_variable_value(char *name, SymbolTable *symbolTable)
 {
     Symbol *tmp = symbolTable->symbols;
     while (tmp != NULL)
@@ -117,15 +122,28 @@ void *getVariableValue(char *name, SymbolTable *symbolTable)
     return (NULL);
 }
 
-void addSymbol(Symbol *symbol, SymbolTableStack *symbolTableStack)
+void add_symbol(Symbol *symbol, SymbolTableStack **symbolTableStack)
 {
-    if (find_symbol(symbol->name, symbolTableStack) == 2)
+    if (symbol == NULL)
+        return;
+    if ((*symbolTableStack)->top == NULL)
+    {
+        printf("Symbol Table Stack is empty\n");
+        return;
+    }
+    if (symbol->to_push == 0)
+    {
+        // printf("Symbol %s is not to push\n", symbol->name);
+        free(symbol);
+        return;
+    }
+    if (find_symbol(symbol->name, *symbolTableStack) == 2)
     {
         printf("Symbol %s already exists\n", symbol->name);
         free(symbol);
         return;
     }
-    SymbolTable *symbolTable = symbolTableStack->top;
+    SymbolTable *symbolTable = (*symbolTableStack)->top;
     if (symbolTable->symbols == NULL)
         symbolTable->symbols = symbol;
     else
@@ -164,7 +182,7 @@ int find_symbol(char *name, SymbolTableStack *stack)
     return (0);
 }
 
-Symbol *getSymbol(char *name, SymbolTableStack *stack)
+Symbol *get_symbol(char *name, SymbolTableStack *stack)
 {
     SymbolTable *tmp = stack->top;
     while (tmp != NULL)
@@ -181,19 +199,50 @@ Symbol *getSymbol(char *name, SymbolTableStack *stack)
 
 }
 
-void addSymbolToStructure(Symbol *symbol, Structure *structure)
+TypeList *create_type_list()
 {
-    if (structure->all_fields == NULL)
+    TypeList *newTypeList = (TypeList *)malloc(sizeof(TypeList));
+    Type *new_type = (Type *)malloc(sizeof(Type));
+    new_type->name = "int";
+    new_type->symbols = NULL;
+    newTypeList->type = new_type;
+    Type *new_type2 = (Type *)malloc(sizeof(Type));
+    new_type2->name = "void";
+    new_type2->symbols = NULL;
+    newTypeList->next = malloc(sizeof(TypeList));
+    newTypeList->next->type = new_type2;
+    newTypeList->next->next = NULL;
+    return (newTypeList);
+}
+
+Type    *get_type(char *name, TypeList *typeList)
+{
+    TypeList *tmp = typeList;
+    while (tmp != NULL)
     {
-        structure->all_fields = symbol;
+        if (strncmp(tmp->type->name, name, strlen(name)) == 0)
+            return (tmp->type);
+        tmp = tmp->next;
     }
-    else
+    return (NULL);
+}
+
+Type    *create_type(char *name, Symbol *symbols)
+{
+    Type *newType = (Type *)malloc(sizeof(Type));
+    newType->name = name;
+    newType->symbols = symbols;
+    return (newType);
+}
+
+void    add_type_to_list(TypeList *typeList, Type *type)
+{
+    TypeList *tmp = typeList;
+    while (tmp->next != NULL)
     {
-        Symbol *tmp = structure->all_fields;
-        while (tmp->next != NULL)
-        {
-            tmp = tmp->next;
-        }
-        tmp->next = symbol;
+        tmp = tmp->next;
     }
+    tmp->next = malloc(sizeof(TypeList));
+    tmp->next->type = type;
+    tmp->next->next = NULL;
 }
