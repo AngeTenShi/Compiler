@@ -43,7 +43,6 @@ typedef struct TypeList {
     struct TypeList *next;
 } TypeList;
 
-
 typedef struct Arguments 
 {
     char *name;

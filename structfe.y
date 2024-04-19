@@ -9,6 +9,7 @@
         TypeList *type_list = NULL;
         Structure *current_structure = NULL;
         Symbol *current_functions_parameter = NULL;
+        int calcul_result = 0;
 %}
 
 %union {
@@ -33,7 +34,7 @@
 
 %start program
 
-%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator
+%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression
 %type<id> direct_declarator  
 
 %%
@@ -47,10 +48,16 @@ primary_expression
                     exit_compiler();
                 }
                 $$.name = $1;
-                $$.value = tmp;
+                $$.value = NULL;
         }
-        | CONSTANT { $$.name = NULL; $$.value = &$1; }
-        | '(' expression ')' { $$ = $2;}
+        | CONSTANT 
+        { 
+                $$.name = NULL; 
+                int *value = malloc(sizeof(int)); // we need to use this local variable to store the value of the constant during the parsing
+                *value = $1;
+                $$.value = value;
+        }
+        | '(' expression ')' { $$ = $2; calcul_result = 0;}
         ;
 
 postfix_expression
@@ -89,64 +96,894 @@ argument_expression_list
 
 unary_expression
         : postfix_expression { $$ = $1; }
-        | unary_operator unary_expression { $$ = $2; }
-        | SIZEOF unary_expression { $$ = $2; }
+        | unary_operator unary_expression 
+        { 
+                int *is_neg = $1.value;
+                if (*is_neg == -1)
+                {
+                        int *v = $2.value;
+                        *v = *v * -1;
+                        free(is_neg);
+                }
+                $$ = $2;
+                if ($1.is_pointer == 1)
+                {
+                        if ($2.is_pointer != 1)
+                        {
+                                yyerror("Cannot dereference a non-pointer\n");
+                                exit_compiler();
+                        }
+                        else
+                        {
+                                int *v = $2.value;
+                                $$.value = v;
+                        }
+                }
+                else if ($1.is_pointer == 2)
+                {
+                        if ($2.is_pointer != 0)
+                        {
+                                yyerror("Cannot take the address of a pointer\n");
+                                exit_compiler();
+                        }
+                        else
+                        {
+                                Symbol *tmp = get_symbol($2.name, symbolTableStack);
+                                $$.value = &(tmp->value);
+                        }
+                }
+        }
+        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v;}
         ;
 
 unary_operator
-        : '&' { $$.is_pointer = 1;}
+        : '&' { $$.is_pointer = 2;}
         | '*' { $$.is_pointer = 1;}
-        | '-' { $$.is_pointer = 0;}
+        | '-' { $$.is_pointer = 0;  int *v = malloc(sizeof(int)); *v = -1; $$.value = v;}
         ;
 
 multiplicative_expression
-        : unary_expression
-        | multiplicative_expression '*' unary_expression
+        : unary_expression { $$ = $1;}
+        | multiplicative_expression '*' unary_expression 
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Multiplication is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Multiplication is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);        
+                calcul_result += first_member * second_member;
+                printf("Calcul : %d * %d = %d\n", first_member, second_member, calcul_result);
+                int *v = malloc(sizeof(int));
+                *v = calcul_result;
+                $$.value = v;
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | multiplicative_expression '/' unary_expression
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Division is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Division is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);
+                if (second_member == 0)
+                {
+                        yyerror("Division by zero\n");
+                        exit_compiler();
+                }
+                calcul_result += first_member / second_member;
+                printf("Calcul : %d / %d = %d\n", first_member, second_member, calcul_result);
+                int *v = malloc(sizeof(int));
+                *v = calcul_result;
+                $$.value = v;
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 additive_expression
-        : multiplicative_expression
+        : multiplicative_expression { $$ = $1;}
         | additive_expression '+' multiplicative_expression
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Addition is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Addition is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);
+                calcul_result += first_member + second_member;
+                int *v = malloc(sizeof(int));
+                *v = calcul_result;
+                $$.value = v;
+                printf("Calcul : %d + %d = %d\n", first_member, second_member, calcul_result);
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | additive_expression '-' multiplicative_expression
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Substraction is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Substraction is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);
+                calcul_result += first_member - second_member;
+                int *v = malloc(sizeof(int));
+                *v = calcul_result;
+                $$.value = v;
+                printf("Calcul : %d - %d = %d\n", first_member, second_member, calcul_result);
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 relational_expression
-        : additive_expression
+        : additive_expression { $$ = $1;}
         | relational_expression '<' additive_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value < second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f < s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | relational_expression '>' additive_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value > second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f > s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | relational_expression LE_OP additive_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value <= second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f <= s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | relational_expression GE_OP additive_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value >= second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f >= s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 equality_expression
-        : relational_expression
+        : relational_expression { $$ = $1;}
         | equality_expression EQ_OP relational_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value == second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f == s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         | equality_expression NE_OP relational_expression
+        {
+                char *first_type;
+                char *second_type;
+                Symbol *first = NULL;
+                Symbol *second = NULL;
+                void *first_member;
+                void *second_member;
+                if ($1.value == NULL)
+                {
+                        first = get_symbol($1.name, symbolTableStack);
+                        first_type = first->data_type->name;
+                        first_member = first->value;
+                }
+                else
+                {
+                        first_member = $1.value;
+                        first_type = "int";
+                }
+                if ($3.value == NULL)
+                {
+                        second = get_symbol($3.name, symbolTableStack);
+                        second_type = second->data_type->name;
+                        second_member = second->value;
+                }
+                else 
+                {
+                        second_member = $3.value;
+                        second_type = "int";
+                }
+                if (first_type == NULL || second_type == NULL)
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if ((strncmp(first_type, second_type, strlen(first_type)) != 0) && strlen(first_type) != strlen(second_type))
+                {
+                        yyerror("Comparison is only allowed on same type\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer != second->is_pointer)
+                {
+                        yyerror("Comparison is not allowed between pointers and not pointers\n");
+                        exit_compiler();
+                }
+                if (first->is_pointer && second->is_pointer)
+                {
+                        if (first->value != second->value)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else if (strncmp(first_type, "int", strlen("int")) == 0 && strlen(first_type) == 3)
+                {
+                        int f = *((int *)first_member);
+                        int s = *((int *)second_member);
+                        if (f != s)
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 1;
+                                $$.value = v;
+                        }
+                        else
+                        {
+                                int *v = malloc(sizeof(int));
+                                *v = 0;
+                                $$.value = v;
+                        }
+                }
+                else
+                {
+                        yyerror("Comparison is only allowed on integers or on pointers\n");
+                        exit_compiler();
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 logical_and_expression
-        : equality_expression
+        : equality_expression { $$ = $1;}
         | logical_and_expression AND_OP equality_expression
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Logical and is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Logical and is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);
+                if (first_member && second_member)
+                {
+                        int *v = malloc(sizeof(int));
+                        *v = 1;
+                        $$.value = v;
+                }
+                else
+                {
+                        int *v = malloc(sizeof(int));
+                        *v = 0;
+                        $$.value = v;
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 logical_or_expression
-        : logical_and_expression
+        : logical_and_expression { $$ = $1;}
         | logical_or_expression OR_OP logical_and_expression
+        {
+                int first_member;
+                int second_member;
+                if ($1.value == NULL)
+                {
+                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
+                        {
+                                yyerror("Logical or is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)first->value;
+                        first_member = *v;
+                }
+                else
+                {
+                        int *v = (int *)$1.value;
+                        first_member = *v;
+                }
+                if ($3.value == NULL)
+                {
+                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                        if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
+                        {
+                                yyerror("Logical or is only allowed on integers\n");
+                                exit_compiler();
+                        }
+                        int *v = (int *)second->value;
+                        second_member = *v;
+                }
+                else 
+                        second_member = *((int *)$3.value);
+                if (first_member || second_member)
+                {
+                        int *v = malloc(sizeof(int));
+                        *v = 1;
+                        $$.value = v;
+                }
+                else
+                {
+                        int *v = malloc(sizeof(int));
+                        *v = 0;
+                        $$.value = v;
+                }
+                if ($1.value != NULL)
+                        free($1.value);
+                if ($3.value != NULL)
+                        free($3.value);
+        }
         ;
 
 expression
-        : logical_or_expression 
-        | unary_expression '=' expression {
+        : logical_or_expression { $$ = $1;}
+        | unary_expression '=' expression 
+        {
+                if ($1.name == NULL)
+                {
+                        yyerror("Cannot assign to a constant\n");
+                        exit_compiler();
+                }
                 Symbol *symbol = get_symbol($1.name, symbolTableStack);
                 if (symbol == NULL) {
                     yyerror("Variable does not exist\n");
                     exit_compiler();
                 }
-                if (symbol->type == 2) {
-                    yyerror("Cannot assign a value to a struct\n");
-                    exit_compiler();
-                }
+                int *v = $3.value;
+                int *to_assign = malloc(sizeof(int));
+                *to_assign = *v;
+                printf("Assigning %d to %s\n", *to_assign, $1.name);
+                symbol->value = to_assign;
             }
         ;
 
@@ -369,7 +1206,7 @@ function_definition
 
 void yyerror(const char *s)
 {
-	fprintf(stderr, "Error compiler at line %d : %s on char %s", yylineno, s, yytext);
+	fprintf(stderr, "Error compiler at line %d : %s", yylineno, s);
 }
 
 extern FILE *yyin;

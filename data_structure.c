@@ -15,7 +15,6 @@ void push_symbol_table(SymbolTable *symbolTable, SymbolTableStack **symbolTableS
         (*symbolTableStack)->top = symbolTable;
         return;
     }
-    printf("Pushing symbol table\n");
     symbolTable->next = (*symbolTableStack)->top;
     (*symbolTableStack)->top = symbolTable;
 }
@@ -27,8 +26,6 @@ void pop_symbol_table(SymbolTableStack **symbolTableStack)
         printf("Symbol Table Stack is empty a\n");
         return;
     }
-    printf("Popping symbol table\n");
-    print_symbol_table((*symbolTableStack)->top);
     SymbolTable *tmp = (*symbolTableStack)->top;
     (*symbolTableStack)->top = tmp->next;
     free(tmp);

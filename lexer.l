@@ -10,10 +10,11 @@ IS                      (u|U|l|L)*
     #include <stdio.h>
     #include "structit.h"
     extern int yylineno;
+    extern int calcul_result;
 %}
 
 %%
-[ \t\v\n\f\r]           { if(yytext[0] == '\n') yylineno++; }
+[ \t\v\n\f\r]           { if(yytext[0] == '\n') yylineno++; calcul_result = 0; } /* reset local calcul result for each line */
 "/*"[^"*/"]*"*/"        { } /* ignore comments */
 "extern"                { return EXTERN; }
 "int"                   { return INT; }
