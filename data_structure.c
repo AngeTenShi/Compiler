@@ -15,6 +15,7 @@ void push_symbol_table(SymbolTable *symbolTable, SymbolTableStack **symbolTableS
         (*symbolTableStack)->top = symbolTable;
         return;
     }
+    printf("Pushing symbol table\n");
     symbolTable->next = (*symbolTableStack)->top;
     (*symbolTableStack)->top = symbolTable;
 }
@@ -23,10 +24,11 @@ void pop_symbol_table(SymbolTableStack **symbolTableStack)
 {
     if ((*symbolTableStack)->top == NULL)
     {
-        printf("Symbol Table Stack is empty\n");
+        printf("Symbol Table Stack is empty a\n");
         return;
     }
     printf("Popping symbol table\n");
+    print_symbol_table((*symbolTableStack)->top);
     SymbolTable *tmp = (*symbolTableStack)->top;
     (*symbolTableStack)->top = tmp->next;
     free(tmp);
@@ -63,7 +65,7 @@ void print_symbol_table(SymbolTable *symbolTable)
     printf("Symbol Table:\n");
     while (tmp != NULL)
     {  
-        char *type = (tmp->type == 0) ? "Variable" : "Function";
+        char *type = (tmp->type == 0) ? "Variable" : (tmp->type == 1) ? "Function" : "Type";
         if (tmp->data_type == NULL)
             printf("Name: %s, DataType: NULL, Type: %s, \n", tmp->name, type);
         else
@@ -98,7 +100,7 @@ int struct_has_member(Symbol *structure, char *name)
     {
         if (tmp->name != NULL)
         {
-            if (strncmp(tmp->name, name, strlen(name)) == 0)
+            if (strncmp(tmp->name, name, strlen(name)) == 0 && strlen(tmp->name) == strlen(name))
             {
                 return (1);
             }
@@ -113,7 +115,7 @@ void *get_variable_value(char *name, SymbolTable *symbolTable)
     Symbol *tmp = symbolTable->symbols;
     while (tmp != NULL)
     {
-        if (strncmp(tmp->name, name, strlen(name)) == 0)
+        if (strncmp(tmp->name, name, strlen(name)) == 0 && strlen(tmp->name) == strlen(name))
         {
             return (tmp->value);
         }
@@ -128,12 +130,12 @@ void add_symbol(Symbol *symbol, SymbolTableStack **symbolTableStack)
         return;
     if ((*symbolTableStack)->top == NULL)
     {
-        printf("Symbol Table Stack is empty\n");
+        printf("Symbol Table Stack is empty b\n");
         return;
     }
     if (symbol->to_push == 0)
     {
-        // printf("Symbol %s is not to push\n", symbol->name);
+        printf("Symbol %s is not to push\n", symbol->name);
         free(symbol);
         return;
     }
@@ -163,10 +165,10 @@ int find_symbol(char *name, SymbolTableStack *stack)
     Symbol *tmp2;
     while (tmp != NULL)
     {
-        Symbol *tmp2 = tmp->symbols;
+        tmp2 = tmp->symbols;
         while (tmp2 != NULL)
         {
-            if (strncmp(tmp2->name, name, strlen(name)) == 0)
+            if (strncmp(tmp2->name, name, strlen(name)) == 0 && strlen(tmp2->name) == strlen(name))
                 break;
             tmp2 = tmp2->next;
         }
@@ -190,13 +192,13 @@ Symbol *get_symbol(char *name, SymbolTableStack *stack)
         Symbol *tmp2 = tmp->symbols;
         while (tmp2 != NULL)
         {
-            if (strncmp(tmp2->name, name, strlen(name)) == 0)
+            if (strncmp(tmp2->name, name, strlen(name)) == 0 && strlen(tmp2->name) == strlen(name))
                 return (tmp2);
             tmp2 = tmp2->next;
         }
         tmp = tmp->next;
     }
-
+    return (NULL);
 }
 
 TypeList *create_type_list()
@@ -220,7 +222,7 @@ Type    *get_type(char *name, TypeList *typeList)
     TypeList *tmp = typeList;
     while (tmp != NULL)
     {
-        if (strncmp(tmp->type->name, name, strlen(name)) == 0)
+        if (strncmp(tmp->type->name, name, strlen(name)) == 0 && strlen(tmp->type->name) == strlen(name))
             return (tmp->type);
         tmp = tmp->next;
     }

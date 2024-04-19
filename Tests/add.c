@@ -8,11 +8,11 @@ int main() {
   i = i + j;
   int a;
   int b;
-  struct a {
+  struct c {
     int c;
     int d;
   };
-  a->c;
+  struct c e;
   printd(i+j);
   printd(45000+j);
   printd(i+123);

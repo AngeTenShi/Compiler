@@ -13,7 +13,7 @@ extern struct Structure *current_structure;
 typedef struct Symbol { // Symbol
     char *name;
     struct Type *data_type; // type of symbol
-    int type; // 0 - variable, 1 - function
+    int type; // 0 - variable, 1 - function 2- type
     int to_push; // used to not push the same symbol twice
     void *value;
     int is_pointer;

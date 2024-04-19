@@ -27,6 +27,7 @@ struct liste *allouer(struct liste *p) {
 	return p;
   }
 }
+
 /* Desallocation de l'element courant de la liste */
 struct liste *desallouer(struct liste *p) {
   struct liste *q;
@@ -34,6 +35,7 @@ struct liste *desallouer(struct liste *p) {
   free(p);
   return q;
 }
+
 /* Iterateur sur la liste. Applique la fonction f sur chaque element */
 struct liste *parcours(struct liste *l, struct liste *f) {
   int i;
@@ -46,6 +48,7 @@ struct liste *parcours(struct liste *l, struct liste *f) {
   }
   return tete;
 }
+
 /* Alloue une liste chainee puis la desalloue */
 int main() {
   struct liste *tete;

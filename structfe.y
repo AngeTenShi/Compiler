@@ -43,11 +43,7 @@ primary_expression
         {
                 Symbol *tmp = get_symbol($1, symbolTableStack);
                 if (tmp == NULL) {
-                    yyerror("Variable does not exist\n");
-                    exit_compiler();
-                }
-                if (tmp->type == 2) {
-                    yyerror("Variable is a struct\n");
+                    yyerror("Symbol does not exist\n");
                     exit_compiler();
                 }
                 $$.name = $1;
@@ -63,6 +59,7 @@ postfix_expression
         | postfix_expression '(' argument_expression_list ')' 
         | postfix_expression PTR_OP IDENTIFIER 
         {
+                print_symbol_table(symbolTableStack->top);
                 Symbol *tmp = get_symbol($1.name, symbolTableStack);
                 if (tmp == NULL)
                 {
@@ -74,9 +71,9 @@ postfix_expression
                     yyerror("Variable is not a struct\n");
                     exit_compiler();
                 }
-                if (tmp->data_type->name == "int" || tmp->data_type->name == "void") {
-                    yyerror("Variable is not a struct\n");
-                    exit_compiler();
+                if ((strncmp(tmp->data_type->name, "int", strlen("int")) == 0 && strlen(tmp->data_type->name) == 3) || (strncmp(tmp->data_type->name, "void", strlen("void")) == 0 && strlen(tmp->data_type->name) == 4)) {
+                        yyerror("Variable is not a struct\n");
+                        exit_compiler();
                 }
                 if (struct_has_member(tmp->data_type->symbols, $3) == 0) {
                     yyerror("Struct does not have this member\n");
@@ -146,15 +143,10 @@ expression
                     yyerror("Variable does not exist\n");
                     exit_compiler();
                 }
-                if (symbol->type == 1) {
-                    yyerror("Cannot assign a value to a function\n");
-                    exit_compiler();
-                }
                 if (symbol->type == 2) {
                     yyerror("Cannot assign a value to a struct\n");
                     exit_compiler();
                 }
-                // set_variable_value($1.name, symbolTableStack, $3);
             }
         ;
 
@@ -165,27 +157,47 @@ declaration
                 int type = $1.type;
                 int to_push = $1.to_push;
                 int is_pointer = $2.is_pointer;
+                if (get_symbol(name, symbolTableStack) != NULL && (to_push == 1) && (type == 1))
+                {
+                        yyerror("Variable already declared\n");
+                        exit_compiler();
+                }
                 Symbol *content = create_symbol(name, data_type, type, NULL, to_push, is_pointer);
                 add_symbol(content, &symbolTableStack);
-                if (to_push == 0)
-                        pop_symbol_table(&symbolTableStack);
+                if (current_functions_parameter != NULL) // case for external definition we don't want to push the parameters so we free it
+                {
+                        Symbol *tmp = current_functions_parameter;
+                        while (tmp != NULL)
+                        {
+                                Symbol *tmp2 = tmp;
+                                tmp = tmp->next;
+                                free(tmp2);
+                        }
+                        current_functions_parameter = NULL;
+                }
+
         }
         | struct_specifier ';' { 
                 Type *data_type = $1.data_type;
-                int type = $1.type;
                 char *name = $1.name;
                 Structure *structure = current_structure;
                 int is_pointer = $1.is_pointer;
-                Symbol *content = create_symbol(name, NULL, type, NULL, 1, is_pointer);
+                if (get_symbol(name, symbolTableStack) != NULL)
+                {
+                        yyerror("Variable already declared\n");
+                        exit_compiler();
+                }
                 data_type->symbols = structure->all_fields;
                 add_type_to_list(type_list, data_type);
+                Symbol *content = create_symbol(name, data_type, 2, NULL, 1, is_pointer);
+                printf("Adding type to list\n");
                 add_symbol(content, &symbolTableStack);
                 current_structure = NULL;
                 }
         ;
 
 declaration_specifiers
-        : EXTERN type_specifier { $$.type = 1; $$.data_type = $2.data_type; $$.to_push = 0; $$.is_pointer = 0;  }
+        : EXTERN type_specifier { $$.type = 1; $$.data_type = $2.data_type; $$.to_push = 0; $$.is_pointer = 0; }
         | type_specifier { $$ = $1; }
         ;
 
@@ -235,22 +247,15 @@ direct_declarator
         | direct_declarator '(' parameter_list ')'
         {
                 $$ = $1;
-                SymbolTable *to_push = create_symbol_table();
                 Symbol *tmp = create_symbol($1, NULL, 1, NULL, 1, 0);
                 add_symbol(tmp, &symbolTableStack);
-                printf("Fun push parameter : %s\n", $1);
-                push_symbol_table(to_push, &symbolTableStack);
-                add_symbol(current_functions_parameter, &symbolTableStack);
-                current_functions_parameter = NULL;
+
         }     
         | direct_declarator '(' ')'
         {
                 $$ = $1;
-                SymbolTable *to_push = create_symbol_table();
                 Symbol *tmp = create_symbol($1, NULL, 1, NULL, 1, 0);
                 add_symbol(tmp, &symbolTableStack);
-                printf("Fun push : %s\n", $1);
-                push_symbol_table(to_push, &symbolTableStack);
         }
         ;
 
@@ -288,17 +293,32 @@ parameter_declaration
 statement
         : compound_statement
         | expression_statement
-        | selection_statement { pop_symbol_table(&symbolTableStack);}
-        | iteration_statement { pop_symbol_table(&symbolTableStack); }
+        | selection_statement 
+        | iteration_statement 
         | jump_statement
         ;
 
+entree : 
+        '{' {   
+                SymbolTable *to_push = create_symbol_table(); 
+                push_symbol_table(to_push, &symbolTableStack); 
+                if (current_functions_parameter != NULL)
+                {
+                        add_symbol(current_functions_parameter, &symbolTableStack);
+                        current_functions_parameter = NULL;
+                }
+             }
+
+sortie: 
+        '}' { pop_symbol_table(&symbolTableStack); }
+
 compound_statement
-        : '{' '}' 
-        | '{' statement_list '}' 
-        | '{' declaration_list '}' 
-        | '{' declaration_list statement_list '}' 
+        : entree sortie
+        | entree statement_list sortie
+        | entree declaration_list sortie
+        | entree declaration_list statement_list sortie
         ;
+
 
 declaration_list
         : declaration
@@ -317,13 +337,13 @@ expression_statement
         ;
 
 selection_statement
-        : IF '(' expression ')' statement %prec THEN { SymbolTable *to_push = create_symbol_table(); push_symbol_table(to_push, &symbolTableStack); }
-        | IF '(' expression ')' statement ELSE statement { SymbolTable *to_push = create_symbol_table(); push_symbol_table(to_push, &symbolTableStack); }
+        : IF '(' expression ')' statement %prec THEN
+        | IF '(' expression ')' statement ELSE statement
         ;
 
 iteration_statement
-        : WHILE '(' expression ')' statement { SymbolTable *to_push = create_symbol_table(); push_symbol_table(to_push, &symbolTableStack); }
-        | FOR '(' expression_statement expression_statement expression ')' statement { SymbolTable *to_push = create_symbol_table(); push_symbol_table(to_push, &symbolTableStack); }
+        : WHILE '(' expression ')' statement 
+        | FOR '(' expression_statement expression_statement expression ')' statement
         ;
 
 jump_statement
@@ -342,14 +362,14 @@ external_declaration
         ;
 
 function_definition
-        : declaration_specifiers declarator compound_statement { pop_symbol_table(&symbolTableStack); }
+        : declaration_specifiers declarator compound_statement 
         ;
 
 %%
 
 void yyerror(const char *s)
 {
-	fprintf(stderr, "Error compiler at line %d : %s", yylineno, s);
+	fprintf(stderr, "Error compiler at line %d : %s on char %s", yylineno, s, yytext);
 }
 
 extern FILE *yyin;
@@ -379,7 +399,6 @@ int main(int ac, char **av)
         symbolTableStack->top = malloc(sizeof(SymbolTable));
         type_list = create_type_list();
         yyparse();
-        print_symbol_table(symbolTableStack->top);
         free(current_structure);
         free(symbolTableStack);
         free(type_list);
