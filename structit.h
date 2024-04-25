@@ -79,4 +79,6 @@ void    add_type_to_list(TypeList *list, Type *type);
 TypeList *create_type_list();
 Type    *get_type(char *name, TypeList *list);
 Type    *create_type(char *name, Symbol *symbols);
+int     is_struct(Symbol *symbol);
 #endif
+

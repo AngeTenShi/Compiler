@@ -245,3 +245,13 @@ void    add_type_to_list(TypeList *typeList, Type *type)
     tmp->next->type = type;
     tmp->next->next = NULL;
 }
+
+int is_struct(Symbol *symbol)
+{
+    // if data_type->name != int and data_type->name != void then it's a struct
+    if (symbol->data_type == NULL)
+        return (0);
+    if ((strncmp(symbol->data_type->name, "int", 3) == 0 && strlen(symbol->data_type->name) == 3) || (strncmp(symbol->data_type->name, "void", 4) == 0 && strlen(symbol->data_type->name) == 4))
+        return (0);
+    return (1);
+}

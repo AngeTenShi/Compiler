@@ -44,7 +44,7 @@ struct liste *parcours(struct liste *l, struct liste *f) {
   tete=p=f(l);
   for (i=0; i<100; i=i+1) {
     p=f(p);
-    if(p!=0) p-> valeur=i;
+    if(p!=0) p->valeur=i;
   }
   return tete;
 }
