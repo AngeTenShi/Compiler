@@ -1,16 +1,19 @@
-extern void *malloc(int size);
-extern void free(void *ptr);
-extern int printd(int i);
+int foo(int a)
+{
+    return 1;
+}
+
+extern void *malloc(int a);
+
 int main()
 {
-    int a;
-    int b;
-    int c;
+    struct a 
+    {
+        int b;
+    };
 
-    a = 3;
-    b = 1;
+    struct a *name;
 
-    c = a * b;
-    c = a / b;
-    c = a < b;
+    name = malloc(sizeof(name));
+    return foo(name);
 }

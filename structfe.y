@@ -11,6 +11,7 @@
         Symbol *current_functions_parameter = NULL;
         int calcul_result = 0;
         Type *current_type = NULL;
+        Type *current_type_parameter = NULL;
 %}
 
 %union {
@@ -35,7 +36,7 @@
 
 %start program
 
-%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression direct_declarator 
+%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression direct_declarator argument_expression_list 
 
 %%
 
@@ -57,7 +58,7 @@ primary_expression
                 *value = $1;
                 $$.value = value;
         }
-        | '(' expression ')' { $$ = $2; calcul_result = 0;}
+        | '(' expression ')' { $$ = $2; }
         ;
 
 postfix_expression
@@ -99,7 +100,38 @@ postfix_expression
         ;
 
 argument_expression_list
-        : expression
+        : expression 
+        {
+                if ($1.name != NULL)
+                {
+                        Symbol *tmp = get_symbol($1.name, symbolTableStack);
+                        if (tmp == NULL)
+                        {
+                                yyerror("Variable does not exist\n");
+                                exit_compiler();
+                        }
+                        if (tmp->data_type == NULL)
+                        {
+                                yyerror("Variable is not typed\n");
+                                exit_compiler();
+                        }
+                        // variable should be int if not it should be a pointer
+                        if (strncmp(tmp->data_type->name, "int", strlen("int")) != 0 || strlen(tmp->data_type->name) != 3)
+                        {
+                                if ($1.is_pointer == 0 && tmp->is_pointer == 0)
+                                {
+                                        yyerror("Argument is not valid\n");
+                                        exit_compiler();
+                                }
+                        } 
+                        $$.value = tmp;
+                }
+                else
+                {
+                        int *v = $1.value;
+                        $$.value = v;
+                }
+        }
         | argument_expression_list ',' expression
         ;
 
@@ -110,7 +142,17 @@ unary_expression
                 int *is_neg = $1.value;
                 if (is_neg != NULL)
                 {
-                        if (*is_neg == -1)
+                        if ($2.name != NULL)
+                        {
+                                Symbol *tmp = get_symbol($2.name, symbolTableStack);
+                                if (*is_neg == -1)
+                                {
+                                        int *v = tmp->value;
+                                        *v = *v * -1;
+                                        free(is_neg);
+                                }
+                        }
+                        else
                         {
                                 int *v = $2.value;
                                 *v = *v * -1;
@@ -118,6 +160,7 @@ unary_expression
                         }
                 }
                 $$ = $2;
+                $$.is_pointer = $1.is_pointer;
                 if ($1.is_pointer == 1)
                 {
                         Symbol *tmp = get_symbol($2.name, symbolTableStack);
@@ -153,7 +196,7 @@ unary_expression
                         }
                 }
         }
-        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v;}
+        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v; $$.is_pointer = 3; }
         ;
 
 unary_operator
@@ -198,7 +241,7 @@ multiplicative_expression
                 else 
                         second_member = *((int *)$3.value);        
                 calcul_result += first_member * second_member;
-                printf("Calcul : %d * %d = %d\n", first_member, second_member, calcul_result);
+                // printf("Calcul : %d * %d = %d\n", first_member, second_member, calcul_result);
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
@@ -246,7 +289,7 @@ multiplicative_expression
                         exit_compiler();
                 }
                 calcul_result += first_member / second_member;
-                printf("Calcul : %d / %d = %d\n", first_member, second_member, calcul_result);
+                // printf("Calcul : %d / %d = %d\n", first_member, second_member, calcul_result);
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
@@ -275,10 +318,7 @@ additive_expression
                         first_member = *v;
                 }
                 else
-                {
-                        int *v = (int *)$1.value;
-                        first_member = *v;
-                }
+                        first_member = *((int *)$1.value);
                 if ($3.value == NULL)
                 {
                         Symbol *second = get_symbol($3.name, symbolTableStack);
@@ -296,7 +336,7 @@ additive_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
-                printf("Calcul : %d + %d = %d\n", first_member, second_member, calcul_result);
+                // printf("Calcul : %d + %d = %d\n", first_member, second_member, calcul_result);
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -339,7 +379,7 @@ additive_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
-                printf("Calcul : %d - %d = %d\n", first_member, second_member, calcul_result);
+                // printf("Calcul : %d - %d = %d\n", first_member, second_member, calcul_result);
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1027,7 +1067,7 @@ logical_or_expression
 
 expression
         : logical_or_expression { $$ = $1;}
-        | unary_expression '=' expression // SET THE DATATYPE FOR EACH FUNCTIONS AND VARIABLE IN SYMBOL TABLE !!!
+        | unary_expression '=' expression
         {
                 if ($1.name == NULL)
                 {
@@ -1050,7 +1090,9 @@ expression
                         Symbol *tmp;
                         tmp = get_symbol($3.name, symbolTableStack);
                         if (is_struct(tmp))
+                        {
                                 tmp = (Symbol *)$3.value;
+                        }
                         if (tmp == NULL)
                         {
                                 tmp = get_symbol($3.name, symbolTableStack);
@@ -1073,6 +1115,7 @@ expression
                                         printf("Warning : Assigning %s to a void * type\n", symbol->name);
                                 if (strncmp(tmp->name, "malloc", strlen("malloc")) != 0)
                                 {   
+                                        printf("Type of %s is %s\n", tmp->name, tmp->data_type->name);
                                         yyerror("Cannot assign different types\n");
                                         exit_compiler();
                                 }
@@ -1089,7 +1132,7 @@ expression
                         int *v = $3.value;
                         int *to_assign = malloc(sizeof(int));
                         *to_assign = *v;
-                        printf("Assigning %d to %s\n", *to_assign, $1.name);
+                        // printf("Assigning %d to %s\n", *to_assign, $1.name);
                         symbol->value = to_assign; // the main issue is that i try to assign a value of a function that is not called yet
                 }
             }
@@ -1117,6 +1160,7 @@ declaration
                 *default_value = 0;
                 Symbol *content = create_symbol(name, data_type, type, default_value, to_push, is_pointer);
                 add_symbol(content, &symbolTableStack);
+                // make_declaration(data_type, name, type, is_pointer);
                 if (current_functions_parameter != NULL) // case for external definition we don't want to push the parameters so we free it
                 {
                         Symbol *tmp = current_functions_parameter;
@@ -1128,7 +1172,6 @@ declaration
                         }
                         current_functions_parameter = NULL;
                 }
-
         }
         | struct_specifier ';' { 
                 Type *data_type = $1.data_type;
@@ -1159,18 +1202,28 @@ declaration
 
 declaration_specifiers
         : EXTERN type_specifier { $$.type = 1; $$.data_type = $2.data_type; $$.to_push = 0; }
-        | type_specifier { $$ = $1; }
+        | type_specifier 
+        { 
+                $$ = $1;
+        }
         ;
 
 type_specifier
-        : VOID { $$.data_type = get_type("void", type_list); $$.to_push = 1; current_type = $$.data_type; }
-        | INT { $$.data_type = get_type("int", type_list); $$.to_push = 1; current_type = $$.data_type;}
-        | struct_specifier { $$.to_push = 1; $$.data_type = $1.data_type; current_type = $$.data_type;}
+        : VOID { $$.data_type = get_type("void", type_list); $$.to_push = 1; if (current_type != NULL) current_type_parameter = $$.data_type; else current_type = $$.data_type; }
+        | INT { $$.data_type = get_type("int", type_list); $$.to_push = 1; if (current_type != NULL) current_type_parameter = $$.data_type; else current_type = $$.data_type; }
+        | struct_specifier 
+        { 
+                $$.to_push = 1; $$.data_type = $1.data_type;
+                if (current_type != NULL)
+                        current_type_parameter = $1.data_type;
+                else
+                        current_type = $1.data_type;
+        }
         ;
 
 struct_specifier
         : STRUCT IDENTIFIER '{' struct_declaration_list '}' { $$.name = $2; $$.data_type = create_type($2, current_structure->all_fields);}
-        | STRUCT IDENTIFIER { $$.name = $2; $$.data_type = create_type($2, NULL); $$.to_push = 1;}
+        | STRUCT IDENTIFIER { $$.name = $2; $$.data_type = get_type($2, type_list); }
         ;
 
 struct_declaration_list
@@ -1203,7 +1256,7 @@ struct_declaration
         ;
 
 declarator
-        : '*' direct_declarator { $$.is_pointer = 1; $$.name = $2.name; }
+        : '*' direct_declarator { $$.name = $2.name; $$.is_pointer = 1; }
         | direct_declarator { $$.name = $1.name;}
         ;
 
@@ -1212,11 +1265,16 @@ direct_declarator
         | '(' declarator ')' { $$.name = $2.name; $$.is_pointer = $2.is_pointer; }
         | direct_declarator '(' parameter_list ')'
         {
+                if (current_type_parameter != NULL && current_type != NULL)
+                {
+                        yyerror("Functions pointer not allowed in functions parameter\n");
+                        exit_compiler();
+                }
+                $$.type = 1;
                 int *default_value = malloc(sizeof(int));
                 *default_value = 0;
                 Symbol *tmp = create_symbol($1.name, current_type, 1, default_value, 1, $1.is_pointer);
                 add_symbol(tmp, &symbolTableStack);
-                current_type = NULL;
         }     
         | direct_declarator '(' ')'
         {
@@ -1242,6 +1300,7 @@ parameter_list
                                 tmp = tmp->next;
                         tmp->next = create_symbol($$.name, $$.data_type, $$.type, default_value, 1, $$.is_pointer);;
                 }
+                current_type_parameter = NULL;
         }
         | parameter_list ',' parameter_declaration
         {
@@ -1256,6 +1315,7 @@ parameter_list
                                 tmp = tmp->next;
                         tmp->next = create_symbol($3.name, $3.data_type, $3.type, default_value, 1, $3.is_pointer);
                 }
+                current_type_parameter = NULL;
         }
         ;
 
@@ -1321,7 +1381,7 @@ iteration_statement
 
 jump_statement
         : RETURN ';'
-        | RETURN expression ';'
+        | RETURN expression ';' 
         ;
 
 program
@@ -1372,6 +1432,7 @@ int main(int ac, char **av)
         symbolTableStack->top = malloc(sizeof(SymbolTable));
         type_list = create_type_list();
         yyparse();
+        print_symbol_table(symbolTableStack->top);
         free(current_structure);
         free(symbolTableStack);
         free(type_list);

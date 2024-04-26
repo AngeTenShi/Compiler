@@ -5,7 +5,7 @@ int main() {
   j = 123;
   printd(-j);
   printd(-123);
-  printd(-(123+0));
+  printd(-(123+10));
   printd(-(j+0));
   return 0;
 }

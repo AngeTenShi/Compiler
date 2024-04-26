@@ -31,26 +31,6 @@ void pop_symbol_table(SymbolTableStack **symbolTableStack)
     free(tmp);
 }
 
-void    set_variable_value(char *name, SymbolTableStack *stack, void *value)
-{
-    Symbol *to_update = get_symbol(name, stack);
-    to_update->value = value;
-}
-
-void print_symbol(Symbol *s)
-{
-    if (s == NULL)
-    {
-        printf("Symbol is NULL\n");
-        return;
-    }
-    char *type = (s->type == 0) ? "Variable" : "Function";
-    if (s->data_type == NULL)
-        printf("Name: %s, DataType: NULL, Type: %s, \n", s->name, type);
-    else
-     printf("Name: %s, DataType: %s, Type: %s, \n", s->name, s->data_type->name, type);
-}
-
 void print_symbol_table(SymbolTable *symbolTable)
 {
     if (symbolTable == NULL)
@@ -66,7 +46,7 @@ void print_symbol_table(SymbolTable *symbolTable)
         if (tmp->data_type == NULL)
             printf("Name: %s, DataType: NULL, Type: %s, \n", tmp->name, type);
         else
-            printf("Name: %s, DataType: %s, Type: %s, \n", tmp->name, tmp->data_type->name, type);
+            printf("Name: %s, DataType: %s, Type: %s, Is pointer : %d \n", tmp->name, tmp->data_type->name, type, tmp->is_pointer);
         tmp = tmp->next;
     }
     printf("---------------------------\n");
@@ -132,7 +112,6 @@ void add_symbol(Symbol *symbol, SymbolTableStack **symbolTableStack)
     }
     if (symbol->to_push == 0)
     {
-        printf("Symbol %s is not to push\n", symbol->name);
         free(symbol);
         return;
     }
@@ -159,7 +138,7 @@ void add_symbol(Symbol *symbol, SymbolTableStack **symbolTableStack)
 int find_symbol(char *name, SymbolTableStack *stack)
 {
     SymbolTable *tmp = stack->top;
-    Symbol *tmp2;
+    Symbol *tmp2 = NULL;
     while (tmp != NULL)
     {
         tmp2 = tmp->symbols;
