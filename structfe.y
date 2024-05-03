@@ -6,12 +6,18 @@
         int yywrap();
         void yyerror(const char *s);
         SymbolTableStack *symbolTableStack = NULL;
-        TypeList *type_list = NULL;
+        t_typelist *type_list = NULL;
         Structure *current_structure = NULL;
         Symbol *current_functions_parameter = NULL;
         int calcul_result = 0;
-        Type *current_type = NULL;
-        Type *current_type_parameter = NULL;
+        t_type *current_type = NULL;
+        t_type *current_type_parameter = NULL;
+        char *output_file = NULL;
+        t_function *current_function = NULL;
+        t_lines *lines = NULL;
+        t_expression *current_expressions = NULL;
+        t_expression *if_expression = NULL;
+        t_expression *else_expression = NULL;
 %}
 
 %union {
@@ -36,7 +42,7 @@
 
 %start program
 
-%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression direct_declarator argument_expression_list 
+%type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression direct_declarator argument_expression_list declaration expression_statement
 
 %%
 
@@ -50,6 +56,7 @@ primary_expression
                 }
                 $$.name = $1;
                 $$.value = NULL;
+                $$.code = $1;
         }
         | CONSTANT 
         { 
@@ -57,14 +64,17 @@ primary_expression
                 int *value = malloc(sizeof(int)); // we need to use this local variable to store the value of the constant during the parsing
                 *value = $1;
                 $$.value = value;
+                $$.code = itoa($1);
         }
-        | '(' expression ')' { $$ = $2; }
+        | '(' expression ')' { $$ = $2; $$.code = ft_strcat(strdup("("), strdup($2.code)); $$.code = ft_strcat(strdup($$.code),strdup(")"));}
         ;
 
 postfix_expression
         : primary_expression { $$ = $1; }
-        | postfix_expression '(' ')'
+        | postfix_expression '(' ')' { $$.code = ft_strcat(strdup($1.code), strdup("()")); }
         | postfix_expression '(' argument_expression_list ')' 
+        {
+        }
         | postfix_expression PTR_OP IDENTIFIER 
         {
                 Symbol *tmp = get_symbol($1.name, symbolTableStack);
@@ -115,7 +125,6 @@ argument_expression_list
                                 yyerror("Variable is not typed\n");
                                 exit_compiler();
                         }
-                        // variable should be int if not it should be a pointer
                         if (strncmp(tmp->data_type->name, "int", strlen("int")) != 0 || strlen(tmp->data_type->name) != 3)
                         {
                                 if ($1.is_pointer == 0 && tmp->is_pointer == 0)
@@ -123,7 +132,12 @@ argument_expression_list
                                         yyerror("Argument is not valid\n");
                                         exit_compiler();
                                 }
-                        } 
+                        }
+                        if (tmp->type == 1)
+                        {
+                                yyerror("Function as argument not allowed\n");
+                                exit_compiler();
+                        }
                         $$.value = tmp;
                 }
                 else
@@ -131,8 +145,47 @@ argument_expression_list
                         int *v = $1.value;
                         $$.value = v;
                 }
+                $$.code = strdup($1.code);
+                
         }
-        | argument_expression_list ',' expression
+        | argument_expression_list ',' expression 
+        {
+                if ($3.name != NULL)
+                {
+                        Symbol *tmp = get_symbol($3.name, symbolTableStack);
+                        if (tmp == NULL)
+                        {
+                                yyerror("Variable does not exist\n");
+                                exit_compiler();
+                        }
+                        if (tmp->data_type == NULL)
+                        {
+                                yyerror("Variable is not typed\n");
+                                exit_compiler();
+                        }
+                        if (strncmp(tmp->data_type->name, "int", strlen("int")) != 0 || strlen(tmp->data_type->name) != 3)
+                        {
+                                if ($1.is_pointer == 0 && tmp->is_pointer == 0)
+                                {
+                                        yyerror("Argument is not valid\n");
+                                        exit_compiler();
+                                }
+                        }
+                        if (tmp->type == 1)
+                        {
+                                yyerror("Function as argument not allowed\n");
+                                exit_compiler();
+                        }
+                        $$.value = tmp;
+                }
+                else
+                {
+                        int *v = $3.value;
+                        $$.value = v;
+                }
+                $$.code = ft_strcat(strdup($$.code), strdup(","));
+                $$.code = ft_strcat(strdup($$.code), strdup($3.code));
+        }
         ;
 
 unary_expression
@@ -196,24 +249,26 @@ unary_expression
                         }
                 }
         }
-        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v; $$.is_pointer = 3; }
+        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v; $$.is_pointer = 3; $$.code = itoa(sizeof($2));}
         ;
 
 unary_operator
-        : '&' { $$.is_pointer = 2;}
-        | '*' { $$.is_pointer = 1;}
-        | '-' { $$.is_pointer = 0;  int *v = malloc(sizeof(int)); *v = -1; $$.value = v;}
+        : '&' { $$.is_pointer = 2; $$.code = strdup("&");}
+        | '*' { $$.is_pointer = 1; $$.code = strdup("*");}
+        | '-' { $$.is_pointer = 0;  int *v = malloc(sizeof(int)); *v = -1; $$.value = v; $$.code = strdup("-");}
         ;
 
 multiplicative_expression
         : unary_expression { $$ = $1;}
         | multiplicative_expression '*' unary_expression 
         {
+                Symbol *first;
+                Symbol *second;
                 int first_member;
                 int second_member;
                 if ($1.value == NULL)
                 {
-                        Symbol *first = get_symbol($1.name, symbolTableStack);
+                        first = get_symbol($1.name, symbolTableStack);
                         if (strncmp(first->data_type->name, "int", strlen("int")) != 0 || strlen(first->data_type->name) != 3) 
                         {
                                 yyerror("Multiplication is only allowed on integers\n");
@@ -229,7 +284,7 @@ multiplicative_expression
                 }
                 if ($3.value == NULL)
                 {
-                        Symbol *second = get_symbol($3.name, symbolTableStack);
+                       second = get_symbol($3.name, symbolTableStack);
                         if (strncmp(second->data_type->name, "int", strlen("int")) != 0 || strlen(second->data_type->name) != 3) 
                         {
                                 yyerror("Multiplication is only allowed on integers\n");
@@ -241,14 +296,21 @@ multiplicative_expression
                 else 
                         second_member = *((int *)$3.value);        
                 calcul_result += first_member * second_member;
-                // printf("Calcul : %d * %d = %d\n", first_member, second_member, calcul_result);
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
+                char *first_name = (first->name == NULL) ? itoa(first_member) : first->name;
+                char *second_name = (second->name == NULL) ? itoa(second_member) : second->name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s * %s", first_name, second_name);
+                else
+                        sprintf(code, " * %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | multiplicative_expression '/' unary_expression
         {
@@ -293,10 +355,18 @@ multiplicative_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s / %s", first_name, second_name);
+                else
+                        sprintf(code, " / %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -306,6 +376,8 @@ additive_expression
         {
                 int first_member;
                 int second_member;
+                char *first_name;
+                char *second_name;
                 if ($1.value == NULL)
                 {
                         Symbol *first = get_symbol($1.name, symbolTableStack);
@@ -316,9 +388,13 @@ additive_expression
                         }
                         int *v = (int *)first->value;
                         first_member = *v;
+                        first_name = first->name;
                 }
                 else
+                {
                         first_member = *((int *)$1.value);
+                        first_name = itoa(first_member);
+                }
                 if ($3.value == NULL)
                 {
                         Symbol *second = get_symbol($3.name, symbolTableStack);
@@ -328,10 +404,14 @@ additive_expression
                                 exit_compiler();
                         }
                         int *v = (int *)second->value;
+                        second_name = second->name;
                         second_member = *v;
                 }
-                else 
+                else
+                {
                         second_member = *((int *)$3.value);
+                        second_name = itoa(second_member);
+                }
                 calcul_result += first_member + second_member;
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
@@ -341,6 +421,12 @@ additive_expression
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s + %s", first_name, second_name);
+                else
+                        sprintf(code, " + %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | additive_expression '-' multiplicative_expression
         {
@@ -380,10 +466,18 @@ additive_expression
                 *v = calcul_result;
                 $$.value = v;
                 // printf("Calcul : %d - %d = %d\n", first_member, second_member, calcul_result);
+                char    *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
+                char    *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s - %s", first_name, second_name);
+                else
+                        sprintf(code, " - %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -470,10 +564,18 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s < %s", first_name, second_name);
+                else
+                        sprintf(code, " < %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | relational_expression '>' additive_expression
         {
@@ -556,10 +658,18 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s > %s", first_name, second_name);
+                else
+                        sprintf(code, " > %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | relational_expression LE_OP additive_expression
         {
@@ -663,10 +773,18 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s <= %s", first_name, second_name);
+                else
+                        sprintf(code, " <= %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | relational_expression GE_OP additive_expression
         {
@@ -749,10 +867,18 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s >= %s", first_name, second_name);
+                else
+                        sprintf(code, " >= %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -854,10 +980,18 @@ equality_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s == %s", first_name, second_name);
+                else
+                        sprintf(code, " == %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         | equality_expression NE_OP relational_expression
         {
@@ -950,10 +1084,18 @@ equality_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s != %s", first_name, second_name);
+                else
+                        sprintf(code, " != %s", second_name);
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -1004,10 +1146,23 @@ logical_and_expression
                         *v = 0;
                         $$.value = v;
                 }
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s && ", first_name);
+                else
+                {
+                        if ($3.code == NULL)
+                                sprintf(code, " && %s", second_name);
+                        else
+                                sprintf(code, " && %s", $3.code);
+                }
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -1058,10 +1213,23 @@ logical_or_expression
                         *v = 0;
                         $$.value = v;
                 }
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
                         free($3.value);
+                char *code = malloc(strlen(first_name) + strlen(second_name) + 10);
+                if ($$.code == NULL)
+                        sprintf(code, "%s || %s", first_name, second_name);
+                else
+                {
+                        if ($3.code == NULL)
+                                sprintf(code, " || %s", second_name);
+                        else
+                                sprintf(code, " || %s", $3.code);
+                }
+                $$.code = ft_strcat(strdup($$.code), code);
         }
         ;
 
@@ -1112,7 +1280,7 @@ expression
                         {
                                 // if it's not same datatype we check if it's void * type and give warning but accept malloc to alloc
                                 if (strncmp(tmp->data_type->name, "void", strlen("void")) == 0 && strlen(tmp->data_type->name) == 4) 
-                                        printf("Warning : Assigning %s to a void * type\n", symbol->name);
+                                        // printf("Warning : Assigning %s to a void * type\n", symbol->name);
                                 if (strncmp(tmp->name, "malloc", strlen("malloc")) != 0)
                                 {   
                                         printf("Type of %s is %s\n", tmp->name, tmp->data_type->name);
@@ -1135,13 +1303,19 @@ expression
                         // printf("Assigning %d to %s\n", *to_assign, $1.name);
                         symbol->value = to_assign; // the main issue is that i try to assign a value of a function that is not called yet
                 }
+                char *code = ft_strcat(strdup($1.name), strdup(" = "));
+                if ($3.code != NULL)
+                        code = ft_strcat(code, strdup($3.code));
+                else
+                        code = ft_strcat(code, itoa(*((int *)$3.value)));
+                $$.code = code;
             }
         ;
 
 declaration
         : declaration_specifiers declarator ';' {
                 Symbol *tmp = get_symbol($2.name, symbolTableStack);
-                Type *data_type = $1.data_type;
+                t_type *data_type = $1.data_type;
                 char *name = $2.name;
                 int type = $1.type;
                 int to_push = $1.to_push;
@@ -1160,9 +1334,10 @@ declaration
                 *default_value = 0;
                 Symbol *content = create_symbol(name, data_type, type, default_value, to_push, is_pointer);
                 add_symbol(content, &symbolTableStack);
-                // make_declaration(data_type, name, type, is_pointer);
                 if (current_functions_parameter != NULL) // case for external definition we don't want to push the parameters so we free it
                 {
+                        add_arguments_to_function(current_functions_parameter, &current_function);
+                        write_function(current_function, output_file);
                         Symbol *tmp = current_functions_parameter;
                         while (tmp != NULL)
                         {
@@ -1171,10 +1346,15 @@ declaration
                                 free(tmp2);
                         }
                         current_functions_parameter = NULL;
+                        reset_function(&current_function);
+                        current_function->pushed = 1;
                 }
+                char *code = malloc(strlen(data_type->name) + strlen(name) + 10);
+                sprintf(code, "%s %s;", data_type->name, name);
+                $$.code = code;
         }
         | struct_specifier ';' { 
-                Type *data_type = $1.data_type;
+                t_type *data_type = $1.data_type;
                 char *name = $1.name;
                 Structure *structure = current_structure;
                 int is_pointer = $1.is_pointer;
@@ -1197,14 +1377,22 @@ declaration
                 Symbol *content = create_symbol(name, data_type, 2, default_value, 1, is_pointer);
                 add_symbol(content, &symbolTableStack);
                 current_structure = NULL;
-                }
+                char *code = malloc(strlen(data_type->name) + strlen(name) + 10);
+                sprintf(code, "%s %s;", data_type->name, name);
+                $$.code = code;
+        }
         ;
 
 declaration_specifiers
-        : EXTERN type_specifier { $$.type = 1; $$.data_type = $2.data_type; $$.to_push = 0; }
+        : EXTERN type_specifier { $$.type = 1; $$.data_type = $2.data_type; $$.to_push = 0; current_function->is_extern = 1; current_function->return_type = $2.data_type; }
         | type_specifier 
         { 
                 $$ = $1;
+                if ($$.data_type == NULL)
+                {
+                        yyerror("Unknown type\n");
+                        exit_compiler();
+                }
         }
         ;
 
@@ -1223,7 +1411,7 @@ type_specifier
 
 struct_specifier
         : STRUCT IDENTIFIER '{' struct_declaration_list '}' { $$.name = $2; $$.data_type = create_type($2, current_structure->all_fields);}
-        | STRUCT IDENTIFIER { $$.name = $2; $$.data_type = get_type($2, type_list); }
+        | STRUCT IDENTIFIER { $$.name = $2; $$.data_type = get_type($2, type_list);}
         ;
 
 struct_declaration_list
@@ -1256,7 +1444,7 @@ struct_declaration
         ;
 
 declarator
-        : '*' direct_declarator { $$.name = $2.name; $$.is_pointer = 1; }
+        : '*' direct_declarator { $$.name = $2.name; $$.is_pointer = 1; if (current_function->pushed == 0) current_function->is_pointer = 1; }
         | direct_declarator { $$.name = $1.name;}
         ;
 
@@ -1275,6 +1463,8 @@ direct_declarator
                 *default_value = 0;
                 Symbol *tmp = create_symbol($1.name, current_type, 1, default_value, 1, $1.is_pointer);
                 add_symbol(tmp, &symbolTableStack);
+                current_function->name = $1.name;
+                current_function->return_type = current_type;
         }     
         | direct_declarator '(' ')'
         {
@@ -1282,6 +1472,8 @@ direct_declarator
                 *default_value = 0;
                 Symbol *tmp = create_symbol($1.name, current_type, 1, default_value, 1, $1.is_pointer);
                 add_symbol(tmp, &symbolTableStack);
+                current_function->name = $1.name;
+                current_function->return_type = current_type;
                 current_type = NULL;
         }
         ;
@@ -1291,6 +1483,11 @@ parameter_list
         {
                 int *default_value = malloc(sizeof(int));
                 *default_value = 0;
+                if ($$.data_type == NULL)
+                {
+                        yyerror("Unknown type for parameter\n");
+                        exit_compiler();
+                }
                 if (current_functions_parameter == NULL)
                         current_functions_parameter = create_symbol($$.name, $$.data_type, $$.type, default_value, 1, $$.is_pointer);
                 else
@@ -1325,7 +1522,7 @@ parameter_declaration
 
 statement
         : compound_statement
-        | expression_statement
+        | expression_statement { add_expression(&current_expressions, $1.code); }
         | selection_statement 
         | iteration_statement 
         | jump_statement
@@ -1338,12 +1535,16 @@ entree :
                 if (current_functions_parameter != NULL)
                 {
                         add_symbol(current_functions_parameter, &symbolTableStack);
+                        add_arguments_to_function(current_functions_parameter, &current_function);
                         current_functions_parameter = NULL;
                 }
              }
 
 sortie: 
-        '}' { pop_symbol_table(&symbolTableStack); }
+        '}' 
+        { 
+                pop_symbol_table(&symbolTableStack); 
+        }
 
 compound_statement
         : entree sortie 
@@ -1354,8 +1555,8 @@ compound_statement
 
 
 declaration_list
-        : declaration
-        | declaration_list declaration
+        : declaration { add_line(&lines, $1.code); }
+        | declaration_list declaration { add_line(&lines, $2.code); }
         ;
 
 statement_list
@@ -1365,23 +1566,40 @@ statement_list
         ;
 
 expression_statement
-        : ';'
-        | expression ';'
+        : ';' { $$.code = ft_strcat(strdup($$.code), strdup(";")); }
+        | expression ';' { $1.code = ft_strcat(strdup($1.code), strdup(";")); $$.code = $1.code; }
         ;
 
 selection_statement
-        : IF '(' expression ')' statement %prec THEN
-        | IF '(' expression ')' statement ELSE statement
+        : IF '(' expression ')' statement %prec THEN { make_if(&lines, $3.code, current_expressions); reset_expressions(&current_expressions); }
+        | IF '(' expression ')' statement else_statement { make_if_else(&lines, $3.code, if_expression, else_expression); reset_expressions(&current_expressions); }
+        ;
+
+is_else:
+        ELSE { if_expression = current_expressions; current_expressions = NULL;}
+
+else_statement
+        : is_else statement {  else_expression = current_expressions; }
         ;
 
 iteration_statement
         : WHILE '(' expression ')' statement 
+        {
+                make_while(&lines, $3.code, current_expressions);
+                reset_expressions(&current_expressions);
+        }
         | FOR '(' expression_statement expression_statement expression ')' statement
+        {
+                $3.code[strlen($3.code) - 1] = '\0';
+                $4.code[strlen($4.code) - 1] = '\0';
+                make_for(&lines, $3.code, $4.code, $5.code, current_expressions);
+                reset_expressions(&current_expressions);
+        }
         ;
 
 jump_statement
-        : RETURN ';'
-        | RETURN expression ';' 
+        : RETURN ';' { add_expression(&current_expressions, strdup("return ;")); }
+        | RETURN expression ';' { char *code = ft_strcat(strdup("return "), ft_strcat(strdup($2.code), strdup(";"))); add_expression(&current_expressions, code); }
         ;
 
 program
@@ -1390,12 +1608,28 @@ program
         ;
 
 external_declaration
-        : function_definition
-        | declaration
+        : function_definition  
+        | declaration 
         ;
 
-function_definition
+function_definition   
         : declaration_specifiers declarator compound_statement 
+        { 
+                write_function(current_function, output_file); 
+                reset_function(&current_function); 
+                if (current_expressions != NULL) 
+                { 
+                        t_expression *tmp = current_expressions;
+                        while (tmp != NULL)
+                        {
+                                add_line(&lines, tmp->expression_line);
+                                tmp = tmp->next;
+                        }                        
+                } 
+                add_line(&lines, strdup("}\n")); 
+                write_statement(lines, output_file); 
+                reset_lines(&lines); 
+        }
         ;
 
 %%
@@ -1411,16 +1645,34 @@ void exit_compiler()
 {
         fclose(yyin);
         /* freeSymbolTable(symbolTable); */
-        /* freeStackExpression(stackExpression); */
         exit(1);
 }
 
 int main(int ac, char **av)
 {
-        if (ac != 2)
+        if (ac < 2 || ac > 4)
         {
                 printf("Usage: %s <filename>\n", av[0]);
+                printf("Usage: %s <filename> -o output\n", av[0]);
                 return 1;
+        }
+        if (strncmp(av[1] + strlen(av[1]) - 2, ".c", 2) != 0)
+        {
+                printf("File must be a .c file\n");
+                return 1;
+        }
+        if (ac == 4 && strcmp(av[2], "-o") == 0)
+        {
+                if (ac < 4)
+                {
+                        printf("Missing output file name\n");
+                        return 1;
+                }
+                output_file = av[3];
+        }
+        else
+        {
+                output_file = "a.out";
         }
         yyin = fopen(av[1], "r");
         if (yyin == NULL)
@@ -1431,8 +1683,9 @@ int main(int ac, char **av)
         symbolTableStack = malloc(sizeof(SymbolTableStack));
         symbolTableStack->top = malloc(sizeof(SymbolTable));
         type_list = create_type_list();
+        current_function = malloc(sizeof(t_function));
+        reset_function(&current_function);
         yyparse();
-        print_symbol_table(symbolTableStack->top);
         free(current_structure);
         free(symbolTableStack);
         free(type_list);

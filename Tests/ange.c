@@ -1,19 +1,26 @@
-int foo(int a)
-{
-    return 1;
-}
+struct liste {
+  int valeur;
 
-extern void *malloc(int a);
+  struct liste *suivant;
+};
 
-int main()
-{
-    struct a 
-    {
-        int b;
-    };
+extern void *malloc(int size);
 
-    struct a *name;
+struct liste *allouer(struct liste *p) {
 
-    name = malloc(sizeof(name));
-    return foo(name);
+  if (p!=0) {
+
+        p->suivant=malloc(sizeof(p));
+
+        return p->suivant;
+
+  } else {
+
+        p=malloc(sizeof(p));
+
+        return p;
+
+  }
+  return p;
+
 }

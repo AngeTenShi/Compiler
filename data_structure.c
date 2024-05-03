@@ -52,7 +52,7 @@ void print_symbol_table(SymbolTable *symbolTable)
     printf("---------------------------\n");
 }
 
-Symbol *create_symbol(char *name, Type *data_type, int type, void *value, int to_push, int is_pointer)
+Symbol *create_symbol(char *name, t_type *data_type, int type, void *value, int to_push, int is_pointer)
 {
     Symbol *newSymbol = (Symbol *)malloc(sizeof(Symbol));
     newSymbol->name = name;
@@ -177,25 +177,25 @@ Symbol *get_symbol(char *name, SymbolTableStack *stack)
     return (NULL);
 }
 
-TypeList *create_type_list()
+t_typelist *create_type_list()
 {
-    TypeList *newTypeList = (TypeList *)malloc(sizeof(TypeList));
-    Type *new_type = (Type *)malloc(sizeof(Type));
+    t_typelist *newTypeList = (t_typelist *)malloc(sizeof(t_typelist));
+    t_type *new_type = (t_type *)malloc(sizeof(t_type));
     new_type->name = "int";
     new_type->symbols = NULL;
     newTypeList->type = new_type;
-    Type *new_type2 = (Type *)malloc(sizeof(Type));
+    t_type *new_type2 = (t_type *)malloc(sizeof(t_type));
     new_type2->name = "void";
     new_type2->symbols = NULL;
-    newTypeList->next = malloc(sizeof(TypeList));
+    newTypeList->next = malloc(sizeof(t_typelist));
     newTypeList->next->type = new_type2;
     newTypeList->next->next = NULL;
     return (newTypeList);
 }
 
-Type    *get_type(char *name, TypeList *typeList)
+t_type    *get_type(char *name, t_typelist *typeList)
 {
-    TypeList *tmp = typeList;
+    t_typelist *tmp = typeList;
     while (tmp != NULL)
     {
         if (strncmp(tmp->type->name, name, strlen(name)) == 0 && strlen(tmp->type->name) == strlen(name))
@@ -205,22 +205,22 @@ Type    *get_type(char *name, TypeList *typeList)
     return (NULL);
 }
 
-Type    *create_type(char *name, Symbol *symbols)
+t_type    *create_type(char *name, Symbol *symbols)
 {
-    Type *newType = (Type *)malloc(sizeof(Type));
+    t_type *newType = (t_type *)malloc(sizeof(t_type));
     newType->name = name;
     newType->symbols = symbols;
     return (newType);
 }
 
-void    add_type_to_list(TypeList *typeList, Type *type)
+void    add_type_to_list(t_typelist *typeList, t_type *type)
 {
-    TypeList *tmp = typeList;
+    t_typelist *tmp = typeList;
     while (tmp->next != NULL)
     {
         tmp = tmp->next;
     }
-    tmp->next = malloc(sizeof(TypeList));
+    tmp->next = malloc(sizeof(t_typelist));
     tmp->next->type = type;
     tmp->next->next = NULL;
 }
@@ -233,4 +233,18 @@ int is_struct(Symbol *symbol)
     if ((strncmp(symbol->data_type->name, "int", 3) == 0 && strlen(symbol->data_type->name) == 3) || (strncmp(symbol->data_type->name, "void", 4) == 0 && strlen(symbol->data_type->name) == 4))
         return (0);
     return (1);
+}
+
+void    reset_function(t_function **function)
+{
+    if (function == NULL)
+        return;
+    if (*function == NULL)
+        return;
+    (*function)->name = NULL;
+    (*function)->return_type = NULL;
+    (*function)->arguments = NULL;
+    (*function)->is_pointer = 0;
+    (*function)->is_extern = 0;
+    (*function)->pushed = 0;
 }
