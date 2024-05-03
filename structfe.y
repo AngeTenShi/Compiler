@@ -74,6 +74,9 @@ postfix_expression
         | postfix_expression '(' ')' { $$.code = ft_strcat(strdup($1.code), strdup("()")); }
         | postfix_expression '(' argument_expression_list ')' 
         {
+                $$.code = ft_strcat(strdup($1.code), strdup("("));
+                $$.code = ft_strcat(strdup($$.code), strdup($3.code));
+                $$.code = ft_strcat(strdup($$.code), strdup(")"));        
         }
         | postfix_expression PTR_OP IDENTIFIER 
         {
@@ -106,6 +109,11 @@ postfix_expression
                         }
                         tmp2 = tmp2->next;
                 }
+                char *field_name = ft_strcat($1.name, strdup("_"));
+                field_name = ft_strcat(strdup(field_name), strdup(tmp->data_type->name));
+                field_name = ft_strcat(strdup(field_name), strdup("_"));
+                field_name = ft_strcat(strdup(field_name), strdup($3));
+                $$.code = field_name;
         }
         ;
 
@@ -145,7 +153,7 @@ argument_expression_list
                         int *v = $1.value;
                         $$.value = v;
                 }
-                $$.code = strdup($1.code);
+                $$.code = $1.code;
                 
         }
         | argument_expression_list ',' expression 
@@ -249,7 +257,48 @@ unary_expression
                         }
                 }
         }
-        | SIZEOF unary_expression { $$ = $2; int *v = malloc(sizeof(int)); *v = sizeof($2); $$.value = v; $$.is_pointer = 3; $$.code = itoa(sizeof($2));}
+        | SIZEOF unary_expression 
+        { 
+                $$ = $2; 
+                int *v = malloc(sizeof(int)); 
+                *v = sizeof($2); 
+                $$.value = v; 
+                $$.is_pointer = 3; 
+                if ($2.name != NULL)
+                {
+                        Symbol *tmp = get_symbol($2.name, symbolTableStack);
+                        if (tmp->data_type == NULL)
+                        {
+                                yyerror("Cannot take the size of a non-typed variable\n");
+                                exit_compiler();
+                        }
+                        if (strncmp(tmp->data_type->name, "int", strlen("int")) == 0 && strlen(tmp->data_type->name) == 3)
+                                $$.code = itoa(sizeof(int));
+                        else
+                        {
+                                int size;
+                                if (tmp->data_type->symbols)
+                                {
+                                        Symbol *tmp2 = tmp->data_type->symbols;
+                                        size = 0;
+                                        while (tmp2 != NULL)
+                                        {
+                                                if (strncmp(tmp2->data_type->name, "int", strlen("int")) == 0 && strlen(tmp2->data_type->name) == 3)
+                                                        size += sizeof(int);
+                                                else
+                                                        size += sizeof(void *);
+                                                tmp2 = tmp2->next;
+                                        }
+                                }
+                                else
+                                {
+                                        yyerror("Cannot take the size of a non-typed variable\n");
+                                        exit_compiler();
+                                }
+                                $$.code = itoa(sizeof(void *) + size);
+                        }
+                }
+        }
         ;
 
 unary_operator
@@ -1303,7 +1352,7 @@ expression
                         // printf("Assigning %d to %s\n", *to_assign, $1.name);
                         symbol->value = to_assign; // the main issue is that i try to assign a value of a function that is not called yet
                 }
-                char *code = ft_strcat(strdup($1.name), strdup(" = "));
+                char *code = ft_strcat(strdup($1.code), strdup(" = "));
                 if ($3.code != NULL)
                         code = ft_strcat(code, strdup($3.code));
                 else
@@ -1377,9 +1426,6 @@ declaration
                 Symbol *content = create_symbol(name, data_type, 2, default_value, 1, is_pointer);
                 add_symbol(content, &symbolTableStack);
                 current_structure = NULL;
-                char *code = malloc(strlen(data_type->name) + strlen(name) + 10);
-                sprintf(code, "%s %s;", data_type->name, name);
-                $$.code = code;
         }
         ;
 
@@ -1410,8 +1456,16 @@ type_specifier
         ;
 
 struct_specifier
-        : STRUCT IDENTIFIER '{' struct_declaration_list '}' { $$.name = $2; $$.data_type = create_type($2, current_structure->all_fields);}
-        | STRUCT IDENTIFIER { $$.name = $2; $$.data_type = get_type($2, type_list);}
+        : STRUCT IDENTIFIER '{' struct_declaration_list '}' 
+        { 
+                $$.name = $2; 
+                $$.data_type = create_type($2, current_structure->all_fields);
+        }
+        | STRUCT IDENTIFIER 
+        { 
+                $$.name = $2; 
+                $$.data_type = get_type($2, type_list);
+        }
         ;
 
 struct_declaration_list
@@ -1440,6 +1494,7 @@ struct_declaration
                         tmp->next = create_symbol($2.name, $1.data_type, $1.type, default_value, 1, $1.is_pointer);
                         tmp->next->next = NULL;
                 }
+
         }
         ;
 

@@ -45,6 +45,24 @@ void    write_function(t_function *function, char *filename)
     {
         fprintf(file, "\n");
         fprintf(file, "{\n");
+        // for all structures create void * or int for each field at beggining of function
+        Symbol *fields = function->arguments;
+        while (fields != NULL)
+        {
+            if (is_struct(fields))
+            {
+                Symbol *tmp = fields->data_type->symbols;
+                while (tmp != NULL)
+                {
+                    char *data_type_output = (strncmp(tmp->data_type->name, "int", 3) == 0) ? "int" : "void *";
+                    char *name = malloc(strlen(data_type_output) + 1 + strlen(fields->name) + strlen(fields->data_type->name) + strlen(tmp->name) + 3);
+                    sprintf(name, "%s %s_%s_%s;",data_type_output, fields->name, fields->data_type->name, tmp->name);
+                    fprintf(file, "%s\n", name);
+                    tmp = tmp->next;
+                }
+            }
+            fields = fields->next;
+        }
     }
     fclose(file);
 }
@@ -206,11 +224,6 @@ char    *create_label()
     }
     label[i] = '\0';
     return (label);
-}
-
-void    convert_to_three_address(t_lines **lines, t_expression *expression)
-{
-    // TODO
 }
 
 void    make_for(t_lines **lines, char *init, char *condition, char *increment, t_expression *statement)
