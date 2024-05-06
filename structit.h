@@ -11,6 +11,8 @@ struct Function;
 
 extern struct TypeList  *type_list;
 extern struct Structure *current_structure;
+extern int tab_level;
+
 typedef struct Symbol { // Symbol
     char *name;
     struct Type *data_type; // type of symbol
@@ -94,14 +96,14 @@ void    reset_function(t_function **function);
 void    reset_lines(t_lines **lines);
 void    add_line(t_lines **lines, char *content);
 void    add_expression(t_expression **expressions, char *content);
-t_expression    *remove_last_expression(t_expression **expressions);
+void    insert_expression(t_expression **expressions, t_expression *exp);
 void    write_statement(t_lines *lines, char *filename);
 void    reset_expressions(t_expression **expressions);
 char    *itoa(int value);
 char    *ft_strcat(char *src, char *dest);
-void    make_for(t_lines **lines, char *init, char *condition, char *increment, t_expression *statement);
-void    make_while(t_lines **lines, char *condition, t_expression *expression);
-void    make_if(t_lines **lines, char *condition, t_expression *expression);
-void    make_if_else(t_lines **lines, char *condition, t_expression *if_expression, t_expression *else_expression);
+t_expression    *make_for(t_lines **lines, char *init, char *condition, char *increment, t_expression *statement);
+t_expression    *make_while(t_lines **lines, char *condition, t_expression *expression);
+t_expression    *make_if(t_lines **lines, char *condition, t_expression *expression);
+t_expression    *make_if_else(t_lines **lines, char *condition, t_expression *if_expression, t_expression *else_expression);
+void    print_expression(t_expression *expression);
 #endif
-

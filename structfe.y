@@ -15,9 +15,10 @@
         char *output_file = NULL;
         t_function *current_function = NULL;
         t_lines *lines = NULL;
-        t_expression *current_expressions = NULL;
+        t_expression *working_expression = NULL;
         t_expression *if_expression = NULL;
         t_expression *else_expression = NULL;
+        int tab_level = 0;
 %}
 
 %union {
@@ -25,6 +26,7 @@
         int val;
         void *ptr;
         Symbol symbol;
+        t_expression *expression;
 }
 
 
@@ -43,6 +45,7 @@
 %start program
 
 %type<symbol> type_specifier declaration_specifiers struct_specifier struct_declaration parameter_declaration parameter_list primary_expression unary_expression postfix_expression expression unary_operator declarator multiplicative_expression additive_expression relational_expression equality_expression logical_and_expression logical_or_expression direct_declarator argument_expression_list declaration expression_statement
+%type<expression> declaration_list selection_statement iteration_statement statement statement_list jump_statement compound_statement
 
 %%
 
@@ -109,7 +112,7 @@ postfix_expression
                         }
                         tmp2 = tmp2->next;
                 }
-                char *field_name = ft_strcat($1.name, strdup("_"));
+                char *field_name = ft_strcat(strdup($1.name), strdup("_"));
                 field_name = ft_strcat(strdup(field_name), strdup(tmp->data_type->name));
                 field_name = ft_strcat(strdup(field_name), strdup("_"));
                 field_name = ft_strcat(strdup(field_name), strdup($3));
@@ -348,8 +351,8 @@ multiplicative_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
-                char *first_name = (first->name == NULL) ? itoa(first_member) : first->name;
-                char *second_name = (second->name == NULL) ? itoa(second_member) : second->name;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1399,7 +1402,8 @@ declaration
                         current_function->pushed = 1;
                 }
                 char *code = malloc(strlen(data_type->name) + strlen(name) + 10);
-                sprintf(code, "%s %s;", data_type->name, name);
+                char *data_type_name = (strncmp(data_type->name, "int", strlen("int")) == 0 && strlen(data_type->name) == 3) ? "int" : "void *";
+                sprintf(code, "%s %s;", data_type_name, name);
                 $$.code = code;
         }
         | struct_specifier ';' { 
@@ -1577,14 +1581,30 @@ parameter_declaration
 
 statement
         : compound_statement
-        | expression_statement { add_expression(&current_expressions, $1.code); }
+        | expression_statement 
+        {
+                t_expression *tmp = malloc(sizeof(t_expression));
+                tmp->expression_line = $1.code;
+                tmp->next = NULL;
+                $$ = tmp;
+        }
         | selection_statement 
+        {
+                $$ = $1;
+        }
         | iteration_statement 
+        {
+                $$ = $1;
+        }
         | jump_statement
+        {
+                $$ = $1;
+        }
         ;
 
-entree : 
-        '{' {   
+entree :       
+        '{' { 
+                tab_level++;
                 SymbolTable *to_push = create_symbol_table(); 
                 push_symbol_table(to_push, &symbolTableStack);
                 if (current_functions_parameter != NULL)
@@ -1597,27 +1617,57 @@ entree :
 
 sortie: 
         '}' 
-        { 
-                pop_symbol_table(&symbolTableStack); 
+        {
+                tab_level--;
+                pop_symbol_table(&symbolTableStack);
         }
 
 compound_statement
-        : entree sortie 
-        | entree statement_list sortie
-        | entree declaration_list sortie
-        | entree declaration_list statement_list sortie
+        : entree sortie { $$ = NULL; }
+        | entree statement_list sortie 
+        { 
+                $$ = $2;
+        }
+        | entree declaration_list sortie { $$ = $2; }
+        | entree declaration_list statement_list sortie 
+        {
+                t_expression *tmp = $2;
+                while (tmp->next != NULL)
+                        tmp = tmp->next;
+                tmp->next = $3;
+                $$ = $2;
+        }
         ;
 
 
 declaration_list
-        : declaration { add_line(&lines, $1.code); }
-        | declaration_list declaration { add_line(&lines, $2.code); }
+        : declaration 
+        {
+                t_expression *t = NULL;
+                add_expression(&t, $1.code);
+                $$ = t;
+        }
+        | declaration_list declaration 
+        {
+                t_expression *t = $1;
+                add_expression(&t, $2.code); 
+                $$ = t;
+        }
         ;
 
 statement_list
         : statement
-        | statement_list statement 
-        | statement_list declaration
+        {
+                $$ = $1;
+        }
+        | statement_list statement
+        {
+                t_expression *tmp = $1;
+                while (tmp->next != NULL)
+                        tmp = tmp->next;
+                tmp->next = $2;
+                $$ = $1;
+        }
         ;
 
 expression_statement
@@ -1626,35 +1676,37 @@ expression_statement
         ;
 
 selection_statement
-        : IF '(' expression ')' statement %prec THEN { make_if(&lines, $3.code, current_expressions); reset_expressions(&current_expressions); }
-        | IF '(' expression ')' statement else_statement { make_if_else(&lines, $3.code, if_expression, else_expression); reset_expressions(&current_expressions); }
-        ;
-
-is_else:
-        ELSE { if_expression = current_expressions; current_expressions = NULL;}
-
-else_statement
-        : is_else statement {  else_expression = current_expressions; }
+        : IF '(' expression ')' statement %prec THEN { $$ = make_if(&lines, $3.code, $5); }
+        | IF '(' expression ')' statement ELSE statement { $$ = make_if_else(&lines, $3.code, $5, $7); }
         ;
 
 iteration_statement
         : WHILE '(' expression ')' statement 
         {
-                make_while(&lines, $3.code, current_expressions);
-                reset_expressions(&current_expressions);
+                $$ = make_while(&lines, $3.code, $5);
         }
         | FOR '(' expression_statement expression_statement expression ')' statement
         {
                 $3.code[strlen($3.code) - 1] = '\0';
                 $4.code[strlen($4.code) - 1] = '\0';
-                make_for(&lines, $3.code, $4.code, $5.code, current_expressions);
-                reset_expressions(&current_expressions);
+                $$ = make_for(&lines, $3.code, $4.code, $5.code, $7);             
         }
         ;
 
 jump_statement
-        : RETURN ';' { add_expression(&current_expressions, strdup("return ;")); }
-        | RETURN expression ';' { char *code = ft_strcat(strdup("return "), ft_strcat(strdup($2.code), strdup(";"))); add_expression(&current_expressions, code); }
+        : RETURN ';' 
+        {
+                $$ = malloc(sizeof(t_expression));
+                $$->expression_line = strdup("return ;");
+                $$->next = NULL;
+        }
+        | RETURN expression ';' 
+        { 
+                char *code = ft_strcat(strdup("return "), ft_strcat(strdup($2.code), strdup(";"))); 
+                $$ = malloc(sizeof(t_expression));
+                $$->expression_line = code;
+                $$->next = NULL;
+        }
         ;
 
 program
@@ -1671,18 +1723,18 @@ function_definition
         : declaration_specifiers declarator compound_statement 
         { 
                 write_function(current_function, output_file); 
-                reset_function(&current_function); 
-                if (current_expressions != NULL) 
-                { 
-                        t_expression *tmp = current_expressions;
-                        while (tmp != NULL)
+                reset_function(&current_function);
+                t_expression *stat = $3;
+                if (stat != NULL)
+                {
+                        while (stat != NULL)
                         {
-                                add_line(&lines, tmp->expression_line);
-                                tmp = tmp->next;
-                        }                        
-                } 
-                add_line(&lines, strdup("}\n")); 
-                write_statement(lines, output_file); 
+                                add_line(&lines, stat->expression_line);
+                                stat = stat->next;
+                        }
+                }
+                add_line(&lines, strdup("}\n"));
+                write_statement(lines, output_file);
                 reset_lines(&lines); 
         }
         ;
@@ -1692,6 +1744,13 @@ function_definition
 void yyerror(const char *s)
 {
 	fprintf(stderr, "Error compiler at line %d : %s", yylineno, s);
+        // remove the output file if exists
+        FILE *f = fopen(output_file, "r");
+        if (f != NULL)
+        {
+                fclose(f);
+                remove(output_file);
+        }
 }
 
 extern FILE *yyin;

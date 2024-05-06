@@ -53,8 +53,8 @@ struct liste *parcours(struct liste *l, struct liste *f) {
 int main() {
   struct liste *tete;
   struct liste *t;
-  t=tete=parcours(0,&allouer);
-  parcours(t,&affiche);
-  parcours(tete,&desallouer);
+  t=tete=parcours(t);
+  parcours(t, tete);
+  parcours(tete, tete);
   return 0;
 }

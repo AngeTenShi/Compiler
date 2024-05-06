@@ -47,6 +47,10 @@ void    write_function(t_function *function, char *filename)
         fprintf(file, "{\n");
         // for all structures create void * or int for each field at beggining of function
         Symbol *fields = function->arguments;
+        char *tab = strdup("");
+        for (int i = 0; i < tab_level + 1; i++) {
+            tab = ft_strcat(tab, strdup("\t"));
+        }
         while (fields != NULL)
         {
             if (is_struct(fields))
@@ -55,8 +59,8 @@ void    write_function(t_function *function, char *filename)
                 while (tmp != NULL)
                 {
                     char *data_type_output = (strncmp(tmp->data_type->name, "int", 3) == 0) ? "int" : "void *";
-                    char *name = malloc(strlen(data_type_output) + 1 + strlen(fields->name) + strlen(fields->data_type->name) + strlen(tmp->name) + 3);
-                    sprintf(name, "%s %s_%s_%s;",data_type_output, fields->name, fields->data_type->name, tmp->name);
+                    char *name = malloc(strlen(tab) + strlen(data_type_output) + 1 + strlen(fields->name) + strlen(fields->data_type->name) + strlen(tmp->name) + 3);
+                    sprintf(name, "%s%s %s_%s_%s;",tab, data_type_output, fields->name, fields->data_type->name, tmp->name);
                     fprintf(file, "%s\n", name);
                     tmp = tmp->next;
                 }
@@ -125,7 +129,7 @@ void    add_line(t_lines **lines, char *content)
 
 void    add_expression(t_expression **expressions, char *content)
 {
-    if (content == NULL)
+    if (!content)
         return ;
     if (expressions == NULL)
         return ;
@@ -155,27 +159,24 @@ void    reset_expressions(t_expression **expressions)
     *expressions = NULL;
 }
 
-t_expression    *remove_last_expression(t_expression **expressions)
+void    insert_expression(t_expression **expressions, t_expression *exp)
 {
-    // remove last expression from the list and return it
     if (expressions == NULL)
-        return (NULL);
+        return ;
+    if (exp == NULL)
+        return ;
     if (*expressions == NULL)
-        return (NULL);
+    {
+        *expressions = exp;
+        return ;
+    }
     t_expression *tmp = *expressions;
-    t_expression *prev = NULL;
     while (tmp->next != NULL)
     {
-        prev = tmp;
         tmp = tmp->next;
     }
-    if (prev == NULL)
-    {
-        *expressions = NULL;
-        return (tmp);
-    }
-    prev->next = NULL;
-    return (tmp);
+    tmp->next = exp;
+
 }
 
 char *itoa(int value)
@@ -226,46 +227,63 @@ char    *create_label()
     return (label);
 }
 
-void    make_for(t_lines **lines, char *init, char *condition, char *increment, t_expression *statement)
+void    print_expression(t_expression *exp)
 {
+    t_expression *tmp = exp;
+    while (tmp != NULL)
+    {
+        printf("%s\n", tmp->expression_line);
+        tmp = tmp->next;
+    }
+
+}
+
+t_expression    *make_for(t_lines **lines, char *init, char *condition, char *increment, t_expression *statement)
+{
+    t_expression *ret = NULL;
     char *stat_label = ft_strcat(strdup("stat_"), create_label());
     char *cond_label = ft_strcat(strdup("cond_"), create_label());
     // a for should be like : for (init; condition; increment) => goto cond_label; cond_label : cond goto stat; stat_label : statement increment;  
-    add_line(lines, ft_strcat(ft_strcat(strdup("goto "), strdup(cond_label)), strdup(";")));
-    add_line(lines, strdup(""));
-    add_line(lines, ft_strcat(cond_label, strdup(":")));
-    add_line(lines, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(stat_label)), strdup(";")));
-    add_line(lines, strdup(""));
-    add_line(lines, ft_strcat(stat_label, strdup(":")));
+    add_expression(&ret, ft_strcat(ft_strcat(strdup("goto "), strdup(cond_label)), strdup(";")));
+    add_expression(&ret, strdup(""));
+    add_expression(&ret, ft_strcat(cond_label, strdup(":")));
+    add_expression(&ret, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(stat_label)), strdup(";")));
+    add_expression(&ret, strdup(""));
+    add_expression(&ret,ft_strcat(stat_label, strdup(":")));
     t_expression *tmp = statement;
     t_expression *prev = NULL;
     while (tmp != NULL)
     {
-        add_line(lines, tmp->expression_line);
+        add_expression(&ret, tmp->expression_line);
         prev = tmp;
         tmp = tmp->next;
         free(prev);
     }
+    add_expression(&ret, strdup(""));
+    add_expression(&ret,  increment);
+    return (ret);
 }
 
-void    make_while(t_lines **lines, char *condition, t_expression *expression)
+t_expression    *make_while(t_lines **lines, char *condition, t_expression *expression)
 {
+    t_expression *ret = NULL;
     char *cond_label = ft_strcat(strdup("cond_"), create_label());
     char *stat_label = ft_strcat(strdup("stat_"), create_label());
-    add_line(lines, ft_strcat(strdup(cond_label), strdup(":")));
-    add_line(lines, ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(stat_label)));
-    add_line(lines, ft_strcat(ft_strcat(strdup("goto "), cond_label), strdup(";")));
-    add_line(lines, strdup(""));
-    add_line(lines, ft_strcat(stat_label, strdup(":")));
+    add_expression(&ret, ft_strcat(strdup(cond_label), strdup(":")));
+    add_expression(&ret, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(stat_label)), strdup(";")));
+    add_expression(&ret, ft_strcat(ft_strcat(strdup("goto "), cond_label), strdup(";")));
+    add_expression(&ret, strdup(""));
+    add_expression(&ret, ft_strcat(stat_label, strdup(":")));
     t_expression *tmp = expression;
     t_expression *prev = NULL;
     while (tmp != NULL)
     {
-        add_line(lines, tmp->expression_line);
+        add_expression(&ret, tmp->expression_line);
         prev = tmp;
         tmp = tmp->next;
         free(prev);
     }
+    return (ret);
 }
 
 char* reverse_condition(char* condition) {
@@ -323,49 +341,51 @@ char* reverse_condition(char* condition) {
     return (reversed_condition);
 }
 
-void    make_if(t_lines **lines, char *condition, t_expression *expression)
+t_expression    *make_if(t_lines **lines, char *condition, t_expression *expression)
 {
-    // if (condition) goto label; label: expression
+    t_expression *ret = NULL;  
     char *label = ft_strcat(strdup("endif_"), create_label());
-    add_line(lines, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(label)), strdup(";")));
+    add_expression(&ret, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), condition), strdup(") goto ")), strdup(label)), strdup(";")));
     t_expression *tmp = expression;
     t_expression *prev = NULL;
     while (tmp != NULL)
     {
-        add_line(lines, tmp->expression_line);
+        add_expression(&ret, tmp->expression_line);
         prev = tmp;
         tmp = tmp->next;
         free(prev);
     }
-    add_line(lines, ft_strcat(label, strdup(":")));
+    add_expression(&ret,ft_strcat(label, strdup(":")));
+    return (ret);
 }
 
 
-void    make_if_else(t_lines **lines, char *condition, t_expression *if_expression, t_expression *else_expression)
+t_expression    *make_if_else(t_lines **lines, char *condition, t_expression *if_expression, t_expression *else_expression)
 {
     // if (reverse_condition) goto else_label; { if_expression } else_label: { else_expression }
+    t_expression *ret = NULL;
     char *else_label = ft_strcat(strdup("else_"), create_label());
-    add_line(lines, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), reverse_condition(condition)), strdup(") goto ")), strdup(else_label)), strdup(";")));
-    add_line(lines, strdup("{"));
+    add_expression(&ret, ft_strcat(ft_strcat(ft_strcat(ft_strcat(strdup("if ("), reverse_condition(condition)), strdup(") goto ")), strdup(else_label)), strdup(";")));
+    add_expression(&ret, strdup("{"));
     t_expression *tmp = if_expression;
     t_expression *prev = NULL;
     while (tmp != NULL)
     {
-        add_line(lines, tmp->expression_line);
+        add_expression(&ret, tmp->expression_line);
         prev = tmp;
         tmp = tmp->next;
         free(prev);
     }
-    add_line(lines, strdup("}"));
-    add_line(lines, ft_strcat(strdup(else_label), strdup(":")));
-    add_line(lines, strdup("{"));
+    add_expression(&ret, strdup("}"));
+    add_expression(&ret, ft_strcat(strdup(else_label), strdup(":")));
+    add_expression(&ret, strdup("{"));
     tmp = else_expression;
     while (tmp != NULL)
     {
-        add_line(lines, tmp->expression_line);
+        add_expression(&ret, tmp->expression_line);
         prev = tmp;
         tmp = tmp->next;
         free(prev);
     }
-    add_line(lines, strdup("}"));
+    add_expression(&ret,strdup("}"));
 }
