@@ -59,7 +59,7 @@ primary_expression
                 }
                 $$.name = $1;
                 $$.value = NULL;
-                $$.code = $1;
+                $$.code = strdup($1);
         }
         | CONSTANT 
         { 
@@ -156,8 +156,7 @@ argument_expression_list
                         int *v = $1.value;
                         $$.value = v;
                 }
-                $$.code = $1.code;
-                
+                $$ = $1;
         }
         | argument_expression_list ',' expression 
         {
@@ -259,6 +258,7 @@ unary_expression
                                         $$.value = &tmp;
                         }
                 }
+                $$.code = ft_strcat($1.code, $2.code);
         }
         | SIZEOF unary_expression 
         { 
@@ -351,8 +351,8 @@ multiplicative_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
-                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -407,8 +407,8 @@ multiplicative_expression
                 int *v = malloc(sizeof(int));
                 *v = calcul_result;
                 $$.value = v;
-                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -616,8 +616,8 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -710,8 +710,8 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -825,8 +825,8 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -919,8 +919,8 @@ relational_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1032,8 +1032,8 @@ equality_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1136,8 +1136,8 @@ equality_expression
                         yyerror("Comparison is only allowed on integers or on pointers\n");
                         exit_compiler();
                 }
-                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(*((int *)first_member)) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(*((int *)second_member)) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1198,8 +1198,8 @@ logical_and_expression
                         *v = 0;
                         $$.value = v;
                 }
-                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1265,8 +1265,8 @@ logical_or_expression
                         *v = 0;
                         $$.value = v;
                 }
-                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.name;
-                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.name;
+                char *first_name = ($1.name == NULL) ? itoa(first_member) : $1.code;
+                char *second_name = ($3.name == NULL) ? itoa(second_member) : $3.code;
                 if ($1.value != NULL)
                         free($1.value);
                 if ($3.value != NULL)
@@ -1399,11 +1399,24 @@ declaration
                         }
                         current_functions_parameter = NULL;
                         reset_function(&current_function);
-                        current_function->pushed = 1;
                 }
                 char *code = malloc(strlen(data_type->name) + strlen(name) + 10);
                 char *data_type_name = (strncmp(data_type->name, "int", strlen("int")) == 0 && strlen(data_type->name) == 3) ? "int" : "void *";
-                sprintf(code, "%s %s;", data_type_name, name);
+                if (data_type->symbols != NULL)
+                {
+                                Symbol *fields = data_type->symbols;
+                                while (fields != NULL)
+                                {
+                                                // field name is : variable_name + _ + struct_name + _ + field_name
+                                                char *field_name = malloc(strlen(name) + strlen(data_type->name) + strlen(fields->name) + 3);
+                                                sprintf(field_name, "%s %s_%s_%s",fields->data_type->name, name, data_type->name, fields->name);
+                                                sprintf(code, "%s%s;\n", code, field_name);
+                                                fields = fields->next;
+                                }
+                        sprintf(code, "%svoid *%s;\n", code, name);
+                }
+                else
+                        sprintf(code, "%s %s;\n", data_type_name, name);
                 $$.code = code;
         }
         | struct_specifier ';' { 
@@ -1564,12 +1577,16 @@ parameter_list
                 int *default_value = malloc(sizeof(int));
                 *default_value = 0;
                 if (tmp == NULL)
+                {
                         current_functions_parameter = create_symbol($3.name, $3.data_type, $3.type, default_value, 1, $3.is_pointer);
+                        current_functions_parameter->next = NULL;
+                }
                 else
                 {
                         while (tmp->next != NULL)
                                 tmp = tmp->next;
                         tmp->next = create_symbol($3.name, $3.data_type, $3.type, default_value, 1, $3.is_pointer);
+                        tmp->next->next = NULL;
                 }
                 current_type_parameter = NULL;
         }
@@ -1652,6 +1669,8 @@ declaration_list
                 t_expression *t = $1;
                 add_expression(&t, $2.code); 
                 $$ = t;
+                while (t->next != NULL)
+                        t = t->next;
         }
         ;
 
@@ -1677,7 +1696,10 @@ expression_statement
 
 selection_statement
         : IF '(' expression ')' statement %prec THEN { $$ = make_if(&lines, $3.code, $5); }
-        | IF '(' expression ')' statement ELSE statement { $$ = make_if_else(&lines, $3.code, $5, $7); }
+        | IF '(' expression ')' statement ELSE statement 
+        {
+                $$ = make_if_else(&lines, $3.code, $5, $7); 
+        }
         ;
 
 iteration_statement
@@ -1755,10 +1777,59 @@ void yyerror(const char *s)
 
 extern FILE *yyin;
 
+void    free_symbol_table(SymbolTableStack **stack)
+{
+        SymbolTable *tmp = (*stack)->top;
+        while (tmp != NULL)
+        {
+                Symbol *tmp2 = tmp->symbols;
+                while (tmp2 != NULL)
+                {
+                        Symbol *tmp3 = tmp2;
+                        tmp2 = tmp2->next;
+                        free(tmp3);
+                }
+                SymbolTable *tmp4 = tmp;
+                tmp = tmp->next;
+                free(tmp4);
+        }
+        free(*stack);
+        *stack = NULL;
+}
+
+
+void    free_type_list(t_typelist **list)
+{
+        t_typelist *tmp = *list;
+        while (tmp != NULL)
+        {
+                t_typelist *tmp2 = tmp;
+                tmp = tmp->next;
+                free(tmp2->type);
+                free(tmp2);
+        }
+        *list = NULL;
+}
+
+void    free_lines(t_expression *lines)
+{
+        t_expression *tmp = lines;
+        while (tmp != NULL)
+        {
+                t_expression *tmp2 = tmp;
+                tmp = tmp->next;
+                free(tmp2->expression_line);
+                free(tmp2);
+        }
+}
+
 void exit_compiler()
 {
         fclose(yyin);
-        /* freeSymbolTable(symbolTable); */
+        free_symbol_table(&symbolTableStack);
+        free_type_list(&type_list);
+        free(current_structure);
+        free(symbolTableStack);
         exit(1);
 }
 
@@ -1800,9 +1871,6 @@ int main(int ac, char **av)
         current_function = malloc(sizeof(t_function));
         reset_function(&current_function);
         yyparse();
-        free(current_structure);
-        free(symbolTableStack);
-        free(type_list);
-        fclose(yyin);
+        exit_compiler();
         return (0);
 }

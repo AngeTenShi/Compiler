@@ -1,3 +1,13 @@
+%{
+        #include "structit.h"
+        extern int yylineno;
+%}
+
+%union {
+        int val;
+        char *id;
+}
+
 %token IDENTIFIER CONSTANT 
 %token LE_OP GE_OP EQ_OP NE_OP
 %token EXTERN
@@ -10,6 +20,7 @@
 primary_expression
         : IDENTIFIER
         | CONSTANT
+        | '(' expression ')' // pas sur de celle la c'est pour faire marcher return (expression);
         ;
 
 postfix_expression
@@ -159,3 +170,33 @@ function_definition
 
 %%
 
+extern FILE *yyin;
+
+
+void yyerror(const char *s)
+{
+	fprintf(stderr, "Error: %s at line %d\n", s, yylineno);
+        fprintf(stderr, "\033[1;31mRejected\033[0m\n");
+        fclose(yyin);
+        exit(1);
+}
+
+
+int     main(int ac, char **av)
+{
+        if (ac < 2 || ac > 2)
+        {
+                printf("Usage: %s <filename>\n", av[0]);
+                return (1);
+        }
+        yyin = fopen(av[1], "r");
+        if (yyin == NULL)
+        {
+                printf("Cannot open file %s\n", av[1]);
+                return (1);
+        }
+        yyparse();
+        fprintf(stderr, "\033[1;32mAccepted\033[0m\n");
+        fclose(yyin);
+        return (0);
+}

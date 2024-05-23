@@ -1,0 +1,6 @@
+extern int printd(int i);
+int main()
+{
+    return (1);
+}
+

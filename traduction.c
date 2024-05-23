@@ -6,7 +6,31 @@ void add_arguments_to_function(Symbol *arguments, t_function **function)
         return ;
     if (*function == NULL)
         return ;
-    (*function)->arguments = arguments;
+    // duplicate the arguments
+    Symbol *tmp = arguments;
+    while (tmp != NULL)
+    {
+        Symbol *new_arg = malloc(sizeof(Symbol));
+        new_arg->name = strdup(tmp->name);
+        new_arg->data_type = tmp->data_type;
+        new_arg->next = NULL;
+        if ((*function)->arguments == NULL)
+        {
+            (*function)->arguments = new_arg;
+        }
+        else
+        {
+            Symbol *tmp2 = (*function)->arguments;
+            while (tmp2->next != NULL)
+            {
+                tmp2 = tmp2->next;
+            }
+            tmp2->next = new_arg;
+        }
+        Symbol **to_free = &tmp;
+        tmp = tmp->next;
+        free(*to_free);
+    } 
 }
 
 
@@ -388,4 +412,5 @@ t_expression    *make_if_else(t_lines **lines, char *condition, t_expression *if
         free(prev);
     }
     add_expression(&ret,strdup("}"));
+    return (ret);
 }
